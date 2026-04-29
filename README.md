@@ -93,3 +93,4 @@ npm run lint
 Primero validar sistema visual, shell por rol y criterio operacional.
 Después recién definir backend real, persistencia, contratos y ejecución técnica con otros equipos.
 # SICOF
+# SICOF
