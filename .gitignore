@@ -1,0 +1,22 @@
+.next
+node_modules
+coverage
+dist
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.DS_Store
+
+# Reportes e informes (excluidos por pedido)
+informe1.md
+Informe1.md
+informe1Latex.tex
+informe1.latex.text
+InstruccionesInforme2.md
+instrucciones informe2.md
+
+# Carpetas de Graphify
+graphify-out/
+Graphify/
+graphify/
