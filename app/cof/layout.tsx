@@ -1,7 +1,6 @@
 import type { ReactNode } from "react";
 
 import { WorkspaceTabs } from "@/components/workspace-tabs";
-import { StatusBadge } from "@/components/ui/status-badge";
 import { cofWorkspace } from "@/lib/sicof-navigation";
 
 export default function CofLayout({ children }: { children: ReactNode }) {

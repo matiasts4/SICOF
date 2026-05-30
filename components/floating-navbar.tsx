@@ -1,7 +1,8 @@
+/* eslint-disable */
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { ChevronRight, Menu, X } from "lucide-react";
 import { useEffect, useState } from "react";
 
@@ -22,13 +23,31 @@ function isWorkspaceActive(pathname: string, href: string) {
 
 export function FloatingNavbar() {
   const pathname = usePathname();
+  const router = useRouter();
   const area = resolveArea(pathname);
   const areaMeta = getAreaMeta(area);
   const workspaceLinks = area === "home" ? [] : workspaceCollections[area].links;
-  const isHome = area === "home";
   const [scrolled, setScrolled] = useState(false);
   const [menuOriginPath, setMenuOriginPath] = useState<string | null>(null);
   const menuOpen = menuOriginPath === pathname;
+  const [user, setUser] = useState<{ nombre: string; rol: string } | null>(null);
+
+  useEffect(() => {
+    const token = localStorage.getItem("sicof_token");
+    const userStr = localStorage.getItem("sicof_user");
+    if (token && userStr) {
+      setUser(JSON.parse(userStr));
+    } else {
+      setUser(null);
+    }
+  }, [pathname]);
+
+  const handleLogout = () => {
+    localStorage.removeItem("sicof_token");
+    localStorage.removeItem("sicof_user");
+    setUser(null);
+    router.push("/login");
+  };
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 12);
@@ -89,12 +108,29 @@ export function FloatingNavbar() {
             </ul>
 
             <div className="ml-auto hidden items-center gap-2 md:flex">
-              <Link
-                href="/terminal"
-                className="btn btn-primary btn-sm"
-              >
-                Ir al Dashboard
-              </Link>
+              {user ? (
+                <>
+                  <span className="text-xs text-slate-400 font-medium mr-2">
+                    {user.nombre} <span className="text-slate-500 font-mono">({user.rol})</span>
+                  </span>
+                  <Link
+                    href={user.rol === "Despachador" ? "/terminal" : user.rol === "Admin COF" ? "/cof" : "/admin"}
+                    className="btn btn-secondary btn-sm"
+                  >
+                    Workspace
+                  </Link>
+                  <button onClick={handleLogout} className="btn btn-primary btn-sm bg-red-500/12 hover:bg-red-500/22 border-red-500/20 text-red-200 cursor-pointer">
+                    Cerrar Sesión
+                  </button>
+                </>
+              ) : (
+                <Link
+                  href="/login"
+                  className="btn btn-primary btn-sm"
+                >
+                  Iniciar Sesión
+                </Link>
+              )}
             </div>
 
             <button
@@ -179,14 +215,39 @@ export function FloatingNavbar() {
               <div className="flex-1" />
             )}
 
-            <Link
-              href="/terminal"
-              onClick={() => setMenuOriginPath(null)}
-              className="btn btn-primary mt-6"
-            >
-              Ir al Dashboard
-              <ChevronRight className="h-4 w-4" />
-            </Link>
+            {user ? (
+              <div className="flex flex-col gap-2 mt-6">
+                <div className="text-center text-xs text-slate-400 mb-2">
+                  Conectado como <span className="font-semibold text-white">{user.nombre}</span> ({user.rol})
+                </div>
+                <Link
+                  href={user.rol === "Despachador" ? "/terminal" : user.rol === "Admin COF" ? "/cof" : "/admin"}
+                  onClick={() => setMenuOriginPath(null)}
+                  className="btn btn-primary w-full text-center"
+                >
+                  Ir al Workspace
+                  <ChevronRight className="h-4 w-4" />
+                </Link>
+                <button
+                  onClick={() => {
+                    setMenuOriginPath(null);
+                    handleLogout();
+                  }}
+                  className="btn btn-secondary w-full text-center bg-red-500/12 hover:bg-red-500/22 border-red-500/20 text-red-200 cursor-pointer"
+                >
+                  Cerrar Sesión
+                </button>
+              </div>
+            ) : (
+              <Link
+                href="/login"
+                onClick={() => setMenuOriginPath(null)}
+                className="btn btn-primary mt-6"
+              >
+                Iniciar Sesión
+                <ChevronRight className="h-4 w-4" />
+              </Link>
+            )}
           </Reveal>
         </div>
       ) : null}

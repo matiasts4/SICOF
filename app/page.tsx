@@ -1,10 +1,8 @@
 import { CommandPreview } from "@/components/landing/command-preview";
 import { DocumentationGrid } from "@/components/landing/documentation-grid";
 import { HomeHero } from "@/components/landing/home-hero";
-import { ModuleGrid } from "@/components/landing/module-grid";
 import { OperationalCta } from "@/components/landing/operational-cta";
 import { RoleGrid } from "@/components/landing/role-grid";
-import { SoaArchitecture } from "@/components/landing/soa-architecture";
 import { WorkspaceShowcase } from "@/components/landing/workspace-showcase";
 
 export default function HomePage() {

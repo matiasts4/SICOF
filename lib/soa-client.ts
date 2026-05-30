@@ -67,7 +67,6 @@ export async function sendToService(
         settled = true;
 
         const body = responseBuffer.subarray(5, 5 + expectedLength);
-        const serviceNameResp = body.subarray(0, 5).toString("utf-8").trim();
         const payloadStr = body.subarray(5).toString("utf-8");
 
         sock.destroy();

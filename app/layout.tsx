@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 
 import { FloatingNavbar } from "@/components/floating-navbar";
 import { DotPattern } from "@/components/ui/dot-pattern";
-import { cn } from "@/lib/utils";
+import { AuthGuard } from "@/components/auth-guard";
 
 import "./globals.css";
 
@@ -35,10 +35,12 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       <body className={`${manrope.variable} ${sora.variable} ${jetBrainsMono.variable} bg-[#080a0f]`}>
         <div className="relative min-h-screen pb-16 overflow-x-hidden">
           <DotPattern
-            className="fill-white/20"
+              className="fill-white/20"
           />
           <FloatingNavbar />
-          <div className="relative z-10 pt-20 sm:pt-24 xl:pt-28">{children}</div>
+          <div className="relative z-10 pt-20 sm:pt-24 xl:pt-28">
+            <AuthGuard>{children}</AuthGuard>
+          </div>
         </div>
       </body>
     </html>

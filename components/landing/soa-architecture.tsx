@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { Panel } from "@/components/ui/panel";
 import { SectionHeading } from "@/components/ui/section-heading";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -28,9 +29,9 @@ export function SoaArchitecture() {
                     <StatusBadge label={client.interfaceName} tone="blue" />
                   </div>
                   <p className="mt-3 text-sm leading-6 text-[var(--text-secondary)]">{client.purpose}</p>
-                  {client.requirements && (
+                  {(client as any).requirements && (
                     <div className="mt-4 flex flex-wrap gap-2">
-                      {client.requirements?.map((req) => (
+                      {(client as any).requirements?.map((req: string) => (
                         <StatusBadge key={req} label={req} tone="green" />
                       ))}
                     </div>
@@ -39,7 +40,7 @@ export function SoaArchitecture() {
               ))}
             </div>
           </Panel>
-
+ 
           <Panel
             eyebrow="Servicios SOA"
             title="Contratos listos para documentar interfaces"
@@ -49,13 +50,13 @@ export function SoaArchitecture() {
               {serviceComponents.map((service, index) => (
                 <div key={service.name} className="hero-grid-card rounded-2xl border border-white/8 bg-white/4 p-4">
                   <div className="flex flex-wrap items-center justify-between gap-3">
-                    <h3 className="font-display text-base font-semibold text-slate-50">{service.name}</h3>
+                    <h3 className="font-display text-base font-semibold text-slate-55">{service.name}</h3>
                     <StatusBadge label={service.contract} tone={index % 2 === 0 ? "orange" : "slate"} />
                   </div>
                   <p className="mt-3 text-sm leading-6 text-[var(--text-secondary)]">{service.responsibilities}</p>
-                  {service.nfr && (
+                  {(service as any).nfr && (
                     <div className="mt-4 flex flex-wrap gap-2">
-                      {service.nfr.map((item) => (
+                      {(service as any).nfr.map((item: string) => (
                         <span
                           key={item}
                           className="rounded-full border border-white/8 bg-slate-950/80 px-3 py-1 text-xs font-medium text-slate-300"

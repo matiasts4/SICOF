@@ -244,104 +244,121 @@ Las entidades base para SICOF son:
 
 ## 6. Punto 6 · Estructuración SOA de funcionalidades
 
-La arquitectura SOA se organiza separando claramente:
+La arquitectura SOA se organiza separando claramente **componentes cliente** y **componentes servicio**, comunicados exclusivamente mediante **sockets TCP/IP nativos** a través de un **Bus ESB centralizado** (puerto 5000).
 
-- **componentes cliente**: donde cada rol consume información y ejecuta acciones
-- **componentes servicio**: donde vive la lógica de negocio y exposición de contratos
+### 6.1 Componentes cliente
 
-## 6.1 Componentes cliente
-
-| Componente cliente | Propósito principal | Ruta actual del sistema visual |
+| Componente cliente | Propósito principal | Servicios SOA consumidos (vía BUS TCP) |
 | --- | --- | --- |
-| Centro Operacional SICOF | comunicar el mapa completo del sistema y abrir workspaces por rol | `/` |
-| Terminal Workspace | despacho por terminal, flota, SoC, salida, frecuencia e incidentes | `/terminal` + subrutas `/terminal/*` |
-| COF Workspace | visión global, comparación entre patios, KPIs e exportación | `/cof` + subrutas `/cof/*` |
-| TI Workspace | permisos, auditoría, usuarios y parametrización | `/admin` + subrutas `/admin/*` |
+| Cliente Despachador | Despacho por terminal, flota, SoC, salida, frecuencia e incidentes | `flota`, `carga`, `gpssv`, `frecu`, `incid` |
+| Cliente Administrador COF | Visión global, comparación entre patios, KPIs y exportación | `carga`, `frecu`, `repor`, `incid` |
+| Cliente Administrador TI | Permisos, auditoría, usuarios y parametrización | `segur`, `flota` |
 
-## 6.2 Componentes servicio
+### 6.2 Componentes servicio
 
-| Componente servicio | Contrato conceptual | Responsabilidad |
-| --- | --- | --- |
-| Fleet Context Service | `fleet.segment.snapshot` | entregar contexto operativo filtrado por terminal |
-| Access Control Service | `scope.guard.profile` | resolver rol, alcance y permisos visibles |
-| Charge Monitor Service | `energy.soc.readiness` | consolidar SoC, autonomía y alertas de energía |
-| Departure Trace Service | `dispatch.geofence.departure` | registrar y publicar salida automática |
-| Frequency Alert Service | `frequency.alert.window` | detectar brechas e incumplimientos de frecuencia |
-| Incident Stream Service | `incident.timeline.feed` | publicar incidentes, severidad y evidencia |
-| Operations Insight Service | `kpi.executive.snapshot` | exponer KPIs operacionales agregados |
-| Report Export Service | `report.bundle.export` | preparar y registrar exportación de reportes |
+Cada servicio se registra en el BUS mediante un nombre de exactamente **5 caracteres** y se comunica mediante el protocolo TCP de 3 segmentos: `[LONGITUD(5)][SERVICIO(5)][PAYLOAD_JSON]`.
+
+| Servicio | Nombre BUS | Responsabilidad | RF asociados |
+| --- | --- | --- | --- |
+| Servicio de Seguridad | `segur` | Autenticación JWT, autorización por rol y terminal | RF-003 |
+| Servicio de Gestión de Flota | `flota` | CRUD de buses, conductores, asignaciones, segmentos por terminal | RF-001, RF-002 |
+| Servicio de Monitoreo GPS | `gpssv` | Registro de posiciones, detección de geocerca para salida automática | RF-005, RF-006 |
+| Servicio de Estado de Carga | `carga` | Monitoreo SoC, alertas por umbral, estado de bahías de carga | RF-004 |
+| Servicio de Control de Frecuencia | `frecu` | Cálculo de intervalos, alertas de desviación, estado de corredores | RF-007, RF-008 |
+| Servicio de Incidentes | `incid` | Registro, escalamiento, consulta y contexto operativo de incidentes | RF-009, RF-010 |
+| Servicio de Reportes | `repor` | KPIs, salud de terminales, reportes consolidados, catálogo de exportación | RF-011, RF-012 |
+
+### 6.3 Persistencia
+
+Se utiliza una **base de datos relacional centralizada compartida** entre todos los servicios. La decisión de persistencia compartida (vs. independiente por servicio) se justifica porque múltiples servicios necesitan integridad referencial cruzada (ej: un incidente referencia un bus, un conductor y un terminal que son gestionados por el servicio de flota). Ver sección de persistencia para detalle completo.
 
 ---
 
 ## 7. Punto 7 · Interfaces por componente y RF/NFR cubiertos
 
-## 7.1 Componentes cliente
+### 7.1 Componentes cliente
 
 | Componente | Interfaz | RF cubiertos | NFR relevantes |
 | --- | --- | --- | --- |
-| Landing / Fleet Narrative | overview del sistema y mapa de módulos | RF-001, RF-005, RF-007 | claridad, onboarding, consistencia |
-| Terminal Operations Board | panel de despacho en tiempo real | RF-001, RF-003, RF-004, RF-005 | foco operativo, baja carga cognitiva, tiempo real |
-| COF Pulse Dashboard | cockpit multi-terminal | RF-005, RF-006, RF-007, RF-008 | síntesis, comparabilidad, exportabilidad |
-| Access Scope Console | consola de políticas y auditoría | RF-002 | seguridad, trazabilidad, control |
+| Cliente Despachador | Panel de despacho: flota, asignaciones, SoC, frecuencias, incidentes por terminal | RF-001 a RF-010 | Respuesta < 2s, disponibilidad 99,5%, usabilidad sin capacitación |
+| Cliente Administrador COF | Dashboard multi-terminal: KPIs, brechas de frecuencia, incidentes críticos, reportes | RF-004, RF-007 a RF-012 | Carga < 3s con 930 buses, 20 usuarios concurrentes |
+| Cliente Administrador TI | Consola de gobierno: usuarios, roles, auditoría, configuración | RF-003 | Trazabilidad completa, seguridad de datos |
 
-## 7.2 Componentes servicio
+### 7.2 Componentes servicio — Contratos de mensajes
 
-| Servicio | Interfaz / contrato | RF cubiertos | NFR relevantes |
-| --- | --- | --- | --- |
-| Fleet Context Service | `fleet.segment.snapshot` | RF-001, RF-002 | aislamiento por terminal, respuesta consistente |
-| Access Control Service | `scope.guard.profile` | RF-002 | seguridad, auditoría |
-| Charge Monitor Service | `energy.soc.readiness` | RF-003 | actualización continua, alerta temprana |
-| Departure Trace Service | `dispatch.geofence.departure` | RF-004 | exactitud temporal, trazabilidad |
-| Frequency Alert Service | `frequency.alert.window` | RF-005 | baja latencia, priorización |
-| Incident Stream Service | `incident.timeline.feed` | RF-006 | observabilidad, respuesta rápida |
-| Operations Insight Service | `kpi.executive.snapshot` | RF-007 | comparabilidad, claridad |
-| Report Export Service | `report.bundle.export` | RF-008 | portabilidad, auditabilidad |
+Cada servicio expone sus operaciones como **acciones JSON** transportadas por el BUS TCP. A continuación se detallan los contratos principales:
+
+**Servicio `segur`** (Seguridad):
+- `login` → recibe `{username, password}` → retorna `{token, user}` con JWT
+- `validate` → recibe `{token}` → retorna `{user}` con rol y terminal
+- `list_users` → recibe `{terminal_id?}` → retorna lista de usuarios
+
+**Servicio `flota`** (Gestión de Flota):
+- `get_buses` → recibe `{terminal_id?}` → retorna lista de buses con tipo de energía
+- `get_conductors` → recibe `{terminal_id?}` → retorna lista de conductores
+- `get_assignments` → recibe `{terminal_id?}` → retorna asignaciones activas
+- `create_assignment` → recibe `{id_bus, id_conductor, id_terminal, id_ruta, fecha_hora_inicio}` → retorna ID de asignación
+- `get_segments` → recibe `{terminal_id}` → retorna segmentos del patio (andén eléctrico, troncal, reserva)
+- `get_terminals` → retorna lista de todos los terminales
+
+**Servicio `gpssv`** (Monitoreo GPS):
+- `register_position` → recibe `{id_bus, lat, lon, speed, timestamp}` → confirma registro
+- `get_fleet_positions` → recibe `{terminal_id?}` → retorna última posición de cada bus
+- `check_geofence` → recibe `{id_bus}` → retorna si el bus está dentro/fuera de la geocerca del terminal
+
+**Servicio `carga`** (Estado de Carga):
+- `get_charge` → recibe `{id_bus}` → retorna SoC actual con clasificación (Suficiente/Advertencia/Crítico)
+- `get_alerts` → recibe `{terminal_id}` → retorna buses con carga bajo umbral (< 50%)
+- `get_charger_status` → recibe `{terminal_id}` → retorna estado de bahías de carga
+
+**Servicio `frecu`** (Control de Frecuencia):
+- `get_intervals` → recibe `{terminal_id?}` → retorna intervalos actuales vs programados por ruta
+- `get_alerts` → recibe `{terminal_id}` → retorna solo brechas que superan umbral
+- `get_corridor_status` → retorna estado agregado por corredor (US4/US6)
+
+**Servicio `incid`** (Incidentes):
+- `create_incident` → recibe `{id_bus, tipo, severidad, descripcion, lat, lon, fecha_hora}` → retorna ID
+- `update_incident` → recibe `{id_incidente, estado}` → confirma actualización (Abierto → Escalado → Cerrado)
+- `get_incidents` → recibe `{terminal_id?, id_bus?, estado?}` → retorna lista filtrada
+
+**Servicio `repor`** (Reportes):
+- `get_kpis` → retorna indicadores clave globales (cumplimiento, incidentes, flota eléctrica)
+- `get_operation_summary` → recibe `{terminal_id?}` → retorna KPIs por terminal
+- `get_daily_report` → recibe `{terminal_id?, format?}` → retorna reporte diario consolidado
+
+Todos los contratos retornan `{"status":"ok", "data":...}` en caso de éxito o `{"status":"error", "message":"..."}` en caso de fallo.
+
+### 7.3 Trazabilidad RF → Servicio
+
+| RF | Descripción | Servicio SOA |
+| --- | --- | --- |
+| RF-001 | Registro de Flota por Terminal | `flota` |
+| RF-002 | Segmentación Operativa por Patio | `flota` |
+| RF-003 | Control de Acceso por Terminal | `segur` |
+| RF-004 | Monitoreo de Carga (SoC) | `carga` |
+| RF-005 | Detección de Geocerca de Salida | `gpssv` |
+| RF-006 | Registro Automático de Salida | `gpssv` |
+| RF-007 | Tablero de Intervalos en Tiempo Real | `frecu` |
+| RF-008 | Alertas de Frecuencia | `frecu` |
+| RF-009 | Registro de Incidentes | `incid` |
+| RF-010 | Asociación de Incidentes a Contexto | `incid` |
+| RF-011 | Dashboard Gerencial | `repor` |
+| RF-012 | Exportación de Reportes | `repor` |
 
 ---
 
-## 8. Relación con el sistema visual construido
+## 8. Relación con el sistema implementado
 
-El sistema visual actual implementa estas relaciones en:
+El sistema SICOF actualmente implementa esta arquitectura con código funcional:
 
-- `app/page.tsx`
-- `app/terminal/**/*.tsx`
-- `app/cof/**/*.tsx`
-- `app/admin/**/*.tsx`
-- `docs/module-coverage.md`
-- `docs/visual-design-system.md`
-
-Eso significa que el informe no está desconectado del frontend. Al contrario: la interfaz ya sirve como evidencia narrativa de cómo se separan responsabilidades por rol y por servicio.
+- **Bus ESB**: `backend/soa_bus.py` — Router TCP en puerto 5000
+- **Librería SOA**: `backend/soa_lib.py` — Protocolo de comunicación
+- **7 servicios**: `backend/services/` — Cada uno registrado con nombre de 5 caracteres
+- **Base de datos**: `backend/db/schema.sql` + `backend/db/seed.sql` — 9 tablas, datos coherentes
+- **Tests**: `backend/test_soa.py` — Validación de todos los servicios vía BUS TCP
 
 ---
 
-## 9. Estado del proyecto después de esta base
+## 9. Conclusión
 
-### Queda resuelto en documentación
-
-- persistencia conceptual
-- modelo lógico base
-- diccionario de datos inicial
-- separación cliente / servicio bajo SOA
-- contratos conceptuales por servicio
-- trazabilidad RF / NFR / interfaz
-
-### Queda pendiente para la siguiente fase técnica
-
-- implementación real del backend
-- creación de base de datos
-- endpoints concretos
-- autenticación real
-- integración GPS / SoC / reportes externos
-
----
-
-## 10. Conclusión
-
-SICOF ya no está solamente en una etapa “bonita” de frontend. Con esta base, el proyecto queda alineado con lo exigido para el informe 2:
-
-- se define cómo persistir
-- se define qué datos sostienen la operación
-- se estructuran clientes y servicios SOA
-- se explican interfaces, RF y NFR por componente
-
-Eso ordena la conversación técnica y deja una transición sana hacia implementación real.
+SICOF implementa una arquitectura SOA completa basada en sockets TCP/IP nativos, con un Bus ESB centralizado como punto único de comunicación entre clientes y servicios. La base de datos relacional compartida garantiza integridad referencial y consistencia transaccional. Cada requerimiento funcional (RF-001 a RF-012) tiene un servicio SOA responsable con contratos de mensajes definidos y verificados.
