@@ -22,8 +22,8 @@ Pasar de navegación estática a flujos transaccionales.
 ## 3. Integración de Datos en Tiempo Real
 El mapa debe dejar de ser una simulación.
 
-- **Ingesta de Telemetría**: Integración con un servicio de GPS real (vía Webhook o API REST).
-- **Actualización vía WebSockets**: Los cambios en la posición de los buses deben reflejarse en el mapa sin recargar la página.
+- **Ingesta de Telemetría**: Integración con el servicio GPS (`gpssv`) mediante sockets TCP a través del Bus SOA.
+- **Actualización en tiempo real**: Los cambios en la posición de los buses se obtienen mediante polling al servicio `gpssv` a través del BUS TCP.
 - **Monitor de Carga (SoC)**: Integración con el sistema de telemetría de las baterías para mostrar el estado de carga real de los buses eléctricos.
 
 ## 4. Workspaces Funcionales
