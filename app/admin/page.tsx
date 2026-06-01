@@ -1,5 +1,7 @@
-import Link from "next/link";
-import { Activity, LockKeyhole, ShieldCheck, Waypoints } from "lucide-react";
+"use client";
+
+import { useEffect, useState } from "react";
+import { Activity, LockKeyhole, ShieldCheck, Waypoints, RefreshCw } from "lucide-react";
 
 import { PageIntro } from "@/components/page-intro";
 import { WorkspaceModuleGrid } from "@/components/workspace-module-grid";
@@ -7,40 +9,139 @@ import { Panel } from "@/components/ui/panel";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { StatCard } from "@/components/ui/stat-card";
 import { adminWorkspace } from "@/lib/sicof-navigation";
-import { accessPolicies, adminMetrics, auditTimeline, serviceHealth } from "@/lib/sicof-data";
+import { accessPolicies, adminMetrics as mockMetrics, auditTimeline, serviceHealth as mockHealth } from "@/lib/sicof-data";
+import type { Tone } from "@/lib/sicof-data";
 
 const icons = [ShieldCheck, LockKeyhole, Activity, Waypoints];
 
 export default function AdminPage() {
+  const [health, setHealth] = useState<any[]>(mockHealth);
+  const [metrics, setMetrics] = useState<any[]>(mockMetrics);
+  const [isRealData, setIsRealData] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  const monitorServices = async () => {
+    try {
+      setLoading(true);
+      
+      // Let's ping the services by triggering quick read actions
+      const targets = [
+        { name: "Flota / buses", url: "/api/fleet?action=get_buses&terminal_id=1" },
+        { name: "Estado de carga", url: "/api/soc?action=get_alerts&terminal_id=1" },
+        { name: "Frecuencia / regularidad", url: "/api/frequency?action=get_intervals" },
+        { name: "Incidentes / bitácora", url: "/api/incidents?action=get_incidents" },
+        { name: "Reportes / kpi", url: "/api/reports?action=get_kpis" },
+        { name: "Seguridad / auth", url: "/api/auth", isPost: true }
+      ];
+
+      let activeCount = 0;
+      const newHealth = await Promise.all(
+        targets.map(async (target) => {
+          const start = performance.now();
+          try {
+            let res;
+            if (target.isPost) {
+              res = await fetch(target.url, {
+                method: "POST",
+                body: JSON.stringify({ action: "ping" }),
+                headers: { "Content-Type": "application/json" }
+              });
+            } else {
+              res = await fetch(target.url);
+            }
+            const end = performance.now();
+            const latencyMs = Math.round(end - start);
+            
+            if (res.ok) {
+              const data = await res.json();
+              if (data.status === "ok" || res.status === 200 || data.status === "error") {
+                // status error is still a response from the service (e.g. invalid action/params but service is alive)
+                activeCount++;
+                return {
+                  name: target.name,
+                  status: "Operativo",
+                  latency: `${latencyMs}ms`,
+                  tone: "green" as Tone
+                };
+              }
+            }
+            return {
+              name: target.name,
+              status: "Fuera de línea",
+              latency: "—",
+              tone: "red" as Tone
+            };
+          } catch (err) {
+            return {
+              name: target.name,
+              status: "Fuera de línea",
+              latency: "—",
+              tone: "red" as Tone
+            };
+          }
+        })
+      );
+
+      setHealth(newHealth);
+      setIsRealData(activeCount > 0);
+
+      // Fetch report KPIs to show real operational indicators if possible
+      if (activeCount > 0) {
+        const resKpis = await fetch("/api/reports?action=get_kpis").then(r => r.json());
+        if (resKpis.status === "ok" && resKpis.data) {
+          // We can map these KPIs to the admin page dashboard metrics to show real system values
+          const mappedMetrics = resKpis.data.map((kpi: any) => ({
+            label: kpi.label,
+            value: kpi.value,
+            detail: kpi.detail,
+            tone: kpi.tone as Tone
+          }));
+          setMetrics(mappedMetrics);
+        }
+      } else {
+        setMetrics(mockMetrics);
+      }
+    } catch (err) {
+      console.warn("Failed to check SOA services health", err);
+      setIsRealData(false);
+      setHealth(mockHealth);
+      setMetrics(mockMetrics);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    monitorServices();
+    const interval = setInterval(monitorServices, 6000);
+    return () => clearInterval(interval);
+  }, []);
+
   return (
     <main>
       <PageIntro
         badge="Vista Administrador de Sistema (TI)"
-        title="Gobierno visual del sistema: accesos, trazas y parámetros listos para crecer"
-        description="La consola TI no existe para decorar. Existe para hacer evidente quién entra, qué puede ver, qué cambió y dónde aparece riesgo en la superficie del sistema."
+        title="Panel de Control y Gobierno TI"
+        description="Supervisión global de accesos, políticas de seguridad, auditoría activa y estado de salud del bus de servicios."
         tone="slate"
-        tags={["Auditoría", "Soporte operacional", "Servicios SOA"]}
+        tags={["Auditoría", "Soporte operacional", isRealData ? "Datos Reales (TCP)" : "Modo Demostración"]}
         actions={
           <>
-            <Link
-              href="/admin/usuarios"
-              className="btn btn-secondary"
+            <button
+              onClick={monitorServices}
+              disabled={loading}
+              className="btn btn-primary cursor-pointer gap-2"
             >
-              Abrir usuarios
-            </Link>
-            <Link
-              href="/admin/permisos"
-              className="btn btn-primary"
-            >
-              Abrir permisos
-            </Link>
+              <RefreshCw className="h-4 w-4" />
+              Sincronizar SOA
+            </button>
           </>
         }
       />
 
       <section className="section-shell pt-0">
         <div className="page-shell grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          {adminMetrics.map((metric, index) => {
+          {metrics.map((metric, index) => {
             const Icon = icons[index] ?? ShieldCheck;
             return (
               <StatCard
@@ -61,7 +162,7 @@ export default function AdminPage() {
           <Panel
             eyebrow="Scope guard"
             title="Políticas de acceso visibles y auditables"
-            description="Buenísimo tener seguridad, pero si nadie entiende el alcance visual de cada rol, después vienen los errores de operación."
+            description="Políticas de acceso y perfiles de usuario autorizados en el sistema."
           >
             <div className="space-y-3">
               {accessPolicies.map((policy) => (
@@ -79,7 +180,7 @@ export default function AdminPage() {
           <Panel
             eyebrow="Auditoría"
             title="Timeline operativo de seguridad"
-            description="No es persistencia todavía. Es diseño de observabilidad: qué eventos deben verse y cómo se leen rápido."
+            description="Historial cronológico de eventos de seguridad y accesos detectados en el sistema."
           >
             <div className="space-y-4">
               {auditTimeline.map((item) => (
@@ -102,11 +203,11 @@ export default function AdminPage() {
         <div className="page-shell">
           <Panel
             eyebrow="Salud de servicios"
-            title="Monitor visual de componentes SOA"
-            description="Esto sirve para la historia técnica: muestra qué servicios existen, cómo se perciben desde TI y dónde hay riesgo de degradación."
+            title="Monitor visual de componentes SOA (Bus TCP)"
+            description="Muestra el estado de comunicación percibido para cada uno de los microservicios en el bus SOA."
           >
             <div className="grid gap-3 lg:grid-cols-2 xl:grid-cols-3">
-              {serviceHealth.map((service) => (
+              {health.map((service) => (
                 <div key={service.name} className="rounded-2xl border border-white/8 bg-white/4 p-4">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <h3 className="text-base font-semibold text-slate-100">{service.name}</h3>
@@ -122,8 +223,8 @@ export default function AdminPage() {
 
       <WorkspaceModuleGrid
         eyebrow="Rutas TI"
-        title="Usuarios, permisos, auditoría y parámetros ya viven como módulos separados"
-        description="Eso ordena la experiencia y prepara la futura implementación real sin mezclar seguridad, observabilidad y configuración en una sola pantalla difusa."
+        title="Módulos de Administración TI"
+        description="Herramientas de gestión de accesos, permisos, auditoría y parametrización general del sistema."
         items={adminWorkspace.links.slice(1)}
       />
     </main>

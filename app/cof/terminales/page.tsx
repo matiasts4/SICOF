@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { ArrowUpDown, Building2, ShieldCheck, Siren } from "lucide-react";
 
 import { PageIntro } from "@/components/page-intro";
@@ -14,26 +13,10 @@ export default function CofTerminalsPage() {
     <main>
       <PageIntro
         badge="COF · Terminales"
-        title="Comparar terminales no es apilar tablas: es mostrar dónde conviene intervenir primero"
-        description="Este tablero resume salud, foco y nivel de riesgo por patio para que COF decida con lectura transversal y sin caer en microdetalle innecesario."
+        title="Estado y Comparativa de Terminales"
+        description="Consola de monitoreo de disponibilidad, cumplimiento operacional y niveles de riesgo de los patios de la red."
         tone="blue"
         tags={["Comparativa multi-terminal", "Priorización"]}
-        actions={
-          <>
-            <Link
-              href="/cof/frecuencia"
-              className="btn btn-secondary"
-            >
-              Ir a frecuencia
-            </Link>
-            <Link
-              href="/cof/kpis"
-              className="btn btn-primary"
-            >
-              Ver KPIs
-            </Link>
-          </>
-        }
       />
 
       <WorkspaceMetricGrid items={cofTerminalMetrics} icons={icons} />
@@ -43,7 +26,7 @@ export default function CofTerminalsPage() {
           <Panel
             eyebrow="Comparativa de patios"
             title="Terminales bajo un mismo criterio visual"
-            description="La idea es que COF lea estabilidad, foco y riesgo sin tener que reconstruir mentalmente cada terminal por separado."
+            description="Indicadores unificados de cumplimiento de regularidad y nivel de preparación operativa por terminal."
           >
             <div className="overflow-x-auto">
               <table className="min-w-full border-separate border-spacing-y-2 text-left text-sm text-slate-300">
@@ -74,7 +57,7 @@ export default function CofTerminalsPage() {
           <Panel
             eyebrow="Lectura rápida"
             title="Notas que explican la presión del turno"
-            description="A veces un comentario bien escrito vale más que otra tarjeta repetida. Acá vive esa capa de síntesis."
+            description="Resumen de novedades, estado del patio y eventos críticos reportados por los terminales."
           >
             <div className="space-y-3">
               {terminalPressureNotes.map((note, index) => (

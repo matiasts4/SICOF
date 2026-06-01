@@ -2,8 +2,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import Link from "next/link";
-import { MonitorDot, ShieldCheck, UserRound, Users } from "lucide-react";
+import { MonitorDot, ShieldCheck, UserRound, Users, RefreshCw } from "lucide-react";
 
 import { PageIntro } from "@/components/page-intro";
 import { WorkspaceMetricGrid } from "@/components/workspace-metric-grid";
@@ -23,30 +22,30 @@ export default function AdminUsersPage() {
   const [loading, setLoading] = useState(true);
   const [isRealData, setIsRealData] = useState(false);
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setLoading(true);
-        const res = await fetch("/api/auth", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "list_users", params: {} })
-        }).then(r => r.json());
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      const res = await fetch("/api/auth", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "list_users", params: {} })
+      }).then(r => r.json());
 
-        if (res.status === "ok") {
-          setUsers(res.data || []);
-          setIsRealData(true);
-        } else {
-          setIsRealData(false);
-        }
-      } catch (err) {
-        console.warn("Backend offline for admin/users page, using mock fallback:", err);
+      if (res.status === "ok") {
+        setUsers(res.data || []);
+        setIsRealData(true);
+      } else {
         setIsRealData(false);
-      } finally {
-        setLoading(false);
       }
-    };
+    } catch (err) {
+      console.warn("Backend offline for admin/users page, using mock fallback:", err);
+      setIsRealData(false);
+    } finally {
+      setLoading(false);
+    }
+  };
 
+  useEffect(() => {
     fetchData();
   }, []);
 
@@ -54,7 +53,7 @@ export default function AdminUsersPage() {
   let displayUserRoster = mockUserRoster;
   let displayActiveSessions = mockActiveSessions;
 
-  if (isRealData && !loading) {
+  if (isRealData) {
     const totalUsers = users.length;
     const activeCount = users.filter(u => u.activo === 1).length;
     const adminCount = users.filter(u => u.rol === "Admin TI" || u.rol === "Admin COF").length;
@@ -97,24 +96,20 @@ export default function AdminUsersPage() {
     <main>
       <PageIntro
         badge={`TI · Usuarios · ${isRealData ? "Datos Reales (TCP)" : "Modo Demostración (Mock)"}`}
-        title="Usuarios y sesiones se leen como superficie operativa, no como una tabla administrativa sin criterio"
-        description="Esta pantalla pone foco en alcance, sesión y señales de revisión para que TI explique rápido quién está adentro, con qué scope y bajo qué condiciones."
+        title="Gestión de Usuarios y Sesiones Activas"
+        description="Supervisión de perfiles de usuario, roles asignados, alcances geográficos de control y estado de sesiones en tiempo real."
         tone="blue"
         tags={["Perfiles", "Sesiones activas"]}
         actions={
           <>
-            <Link
-              href="/admin/permisos"
-              className="btn btn-secondary"
+            <button
+              onClick={fetchData}
+              disabled={loading}
+              className="btn btn-primary cursor-pointer gap-2"
             >
-              Ir a permisos
-            </Link>
-            <Link
-              href="/admin/auditoria"
-              className="btn btn-primary"
-            >
-              Abrir auditoría
-            </Link>
+              <RefreshCw className="h-4 w-4" />
+              Sincronizar Usuarios
+            </button>
           </>
         }
       />
@@ -126,7 +121,7 @@ export default function AdminUsersPage() {
           <Panel
             eyebrow="Roster de acceso"
             title="Perfiles que hoy pisan el sistema"
-            description="La tabla cruza nombre, rol, alcance y estado de sesión para que TI entienda el mapa humano del sistema sin ruido extra."
+            description="Consolidado de usuarios registrados en el sistema con indicación de rol, alcance de terminal y estado de cuenta."
           >
             {loading ? (
               <div className="py-12 text-center text-slate-400 font-mono text-sm">
@@ -165,7 +160,7 @@ export default function AdminUsersPage() {
           <Panel
             eyebrow="Sesiones relevantes"
             title="Lo que TI mira sin entrar todavía al detalle técnico"
-            description="Esta columna transforma eventos de sesión en una historia legible para soporte, seguridad y diseño futuro."
+            description="Resumen de sesiones activas validadas y estado de acceso de operadores al sistema."
           >
             {loading ? (
               <div className="py-12 text-center text-slate-400 font-mono text-sm">

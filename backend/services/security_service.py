@@ -181,12 +181,92 @@ def handle_list_users(params: dict) -> dict:
     return {"status": "ok", "data": users}
 
 
+
+def handle_get_audit_logs(params: dict) -> dict:
+    """Retorna los últimos 50 registros de auditoría."""
+    logs = query("SELECT id_auditoria, username, accion, tabla_afectada, registro_id, detalles, fecha_hora FROM auditoria ORDER BY fecha_hora DESC LIMIT 50")
+    return {"status": "ok", "data": logs}
+
+
+def handle_log_action(params: dict) -> dict:
+    """Registra una acción en la tabla de auditoría."""
+    username = params.get("username", "system")
+    accion = params.get("accion", "")
+    tabla = params.get("tabla_afectada")
+    reg_id = params.get("registro_id")
+    detalles = params.get("detalles")
+    fecha_hora = params.get("fecha_hora") or time.strftime("%Y-%m-%dT%H:%M:%S")
+
+    query(
+        "INSERT INTO auditoria (username, accion, tabla_afectada, registro_id, detalles, fecha_hora) VALUES (?, ?, ?, ?, ?, ?)",
+        (username, accion, tabla, reg_id, detalles, fecha_hora)
+    )
+    return {"status": "ok", "message": "Log registrado"}
+
+
+def handle_get_params(params: dict) -> dict:
+    """Retorna los parámetros globales."""
+    rows = query("SELECT clave, valor, tipo, descripcion FROM parametro_global")
+    return {"status": "ok", "data": rows}
+
+
+def handle_update_param(params: dict) -> dict:
+    """Actualiza un parámetro y registra la acción en auditoría."""
+    clave = params.get("clave", "")
+    valor = params.get("valor", "")
+    username = params.get("username", "system")
+
+    if not clave or not valor:
+        return {"status": "error", "message": "Clave y valor requeridos"}
+
+    old = query("SELECT valor FROM parametro_global WHERE clave = ?", (clave,))
+    if not old:
+        return {"status": "error", "message": f"Parámetro {clave} no existe"}
+    old_val = old[0]["valor"]
+
+    query("UPDATE parametro_global SET valor = ? WHERE clave = ?", (valor, clave))
+
+    # Registrar acción en auditoría
+    query(
+        "INSERT INTO auditoria (username, accion, tabla_afectada, detalles, fecha_hora) VALUES (?, ?, ?, ?, ?)",
+        (username, "UPDATE", "parametro_global", f"Cambio de {clave} de {old_val} a {valor}", time.strftime("%Y-%m-%dT%H:%M:%S"))
+    )
+
+    return {"status": "ok", "message": f"Parámetro {clave} actualizado"}
+
+
+def handle_get_permissions_matrix(params: dict) -> dict:
+    """Retorna la matriz de roles y permisos configurados."""
+    permisos = query("SELECT id_permiso, codigo, nombre, descripcion FROM permiso")
+    rol_permiso = query("SELECT rol, id_permiso FROM rol_permiso")
+
+    matrix = {}
+    for p in permisos:
+        matrix[p["codigo"]] = {
+            "nombre": p["nombre"],
+            "descripcion": p["descripcion"],
+            "roles": []
+        }
+
+    for rp in rol_permiso:
+        for p in permisos:
+            if p["id_permiso"] == rp["id_permiso"]:
+                matrix[p["codigo"]]["roles"].append(rp["rol"])
+
+    return {"status": "ok", "data": matrix}
+
+
 # ── Dispatcher ────────────────────────────────────────────────────────────────
 
 ACTIONS = {
     "login": handle_login,
     "validate": handle_validate,
     "list_users": handle_list_users,
+    "get_audit_logs": handle_get_audit_logs,
+    "log_action": handle_log_action,
+    "get_params": handle_get_params,
+    "update_param": handle_update_param,
+    "get_permissions_matrix": handle_get_permissions_matrix,
 }
 
 

@@ -2,9 +2,8 @@ import type { Metadata } from "next";
 import { JetBrains_Mono, Manrope, Sora } from "next/font/google";
 import type { ReactNode } from "react";
 
-import { FloatingNavbar } from "@/components/floating-navbar";
-import { DotPattern } from "@/components/ui/dot-pattern";
 import { AuthGuard } from "@/components/auth-guard";
+import { MainLayoutWrapper } from "@/components/main-layout-wrapper";
 
 import "./globals.css";
 
@@ -33,14 +32,10 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="es" className="dark">
       <body className={`${manrope.variable} ${sora.variable} ${jetBrainsMono.variable} bg-[#080a0f]`}>
-        <div className="relative min-h-screen pb-16 overflow-x-hidden">
-          <DotPattern
-              className="fill-white/20"
-          />
-          <FloatingNavbar />
-          <div className="relative z-10 pt-20 sm:pt-24 xl:pt-28">
-            <AuthGuard>{children}</AuthGuard>
-          </div>
+        <div className="relative min-h-screen overflow-x-hidden">
+          <AuthGuard>
+            <MainLayoutWrapper>{children}</MainLayoutWrapper>
+          </AuthGuard>
         </div>
       </body>
     </html>

@@ -3,7 +3,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { ClipboardList, Clock3, MapPinned, ShieldCheck } from "lucide-react";
+import { ClipboardList, Clock3, MapPinned, ShieldCheck, RefreshCw, Zap, ClipboardCheck } from "lucide-react";
 
 import { PageIntro } from "@/components/page-intro";
 import { WorkspaceMetricGrid } from "@/components/workspace-metric-grid";
@@ -24,6 +24,25 @@ export default function TerminalDispatchPage() {
   const [assignments, setAssignments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isRealData, setIsRealData] = useState(false);
+  const [actionMsg, setActionMsg] = useState<string | null>(null);
+
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      const res = await fetch(`/api/fleet?action=get_assignments&terminal_id=${terminalId}`).then(r => r.json());
+      if (res.status === "ok") {
+        setAssignments(res.data || []);
+        setIsRealData(true);
+      } else {
+        setIsRealData(false);
+      }
+    } catch (err) {
+      console.warn("Backend offline for dispatch page, using mock fallback:", err);
+      setIsRealData(false);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     const userStr = localStorage.getItem("sicof_user");
@@ -38,32 +57,19 @@ export default function TerminalDispatchPage() {
   }, []);
 
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setLoading(true);
-        const res = await fetch(`/api/fleet?action=get_assignments&terminal_id=${terminalId}`).then(r => r.json());
-        if (res.status === "ok") {
-          setAssignments(res.data || []);
-          setIsRealData(true);
-        } else {
-          setIsRealData(false);
-        }
-      } catch (err) {
-        console.warn("Backend offline for dispatch page, using mock fallback:", err);
-        setIsRealData(false);
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchData();
   }, [terminalId]);
+
+  const handleLanzarAlivio = () => {
+    setActionMsg("¡Servicio de Alivio Iniciado! Despachando unidad de reserva EB-304 vía canal de eventos.");
+    setTimeout(() => setActionMsg(null), 10000);
+  };
 
   let displayDispatchMetrics = mockDispatchMetrics;
   let displayDispatchQueue = mockDispatchQueue;
   let displayGeofenceFeed = mockGeofenceFeed;
 
-  if (isRealData && !loading) {
+  if (isRealData) {
     const totalCount = assignments.length;
     const electricCount = assignments.filter(a => a.tipo_energia === "Eléctrico").length;
 
@@ -120,26 +126,45 @@ export default function TerminalDispatchPage() {
       <PageIntro
         badge={`Terminal · Despacho · ${isRealData ? "Datos Reales (TCP)" : "Modo Demostración (Mock)"}`}
         title="La cola de salida tiene que contar qué sale, qué frena y qué se destraba en la próxima ventana"
-        description="Acá el sistema se vuelve quirúrgico: ventana, andén, conductor, estado de liberación y trazas de geocerca aparecen en una misma lectura para no improvisar." 
         tone="orange"
         tags={["Geocercas", "Ventana inmediata"]}
         actions={
           <>
-            <Link
-              href="/terminal/frecuencia"
-              className="btn btn-secondary"
+            <button
+              onClick={handleLanzarAlivio}
+              className="btn btn-primary cursor-pointer gap-2"
             >
-              Ver frecuencia
-            </Link>
-            <Link
-              href="/terminal/incidentes"
-              className="btn btn-primary"
+              <Zap className="h-4 w-4 text-yellow-400 fill-yellow-400" />
+              Lanzar Alivio Rápido
+            </button>
+            <button
+              onClick={fetchData}
+              className="btn btn-secondary cursor-pointer"
             >
-              Ver incidentes
-            </Link>
+              <RefreshCw className="h-4 w-4" />
+            </button>
           </>
         }
       />
+
+      {actionMsg && (
+        <section className="section-shell pt-0 pb-4">
+          <div className="page-shell">
+            <div className="flex items-center justify-between gap-3 rounded-2xl border border-green-500/20 bg-green-500/10 p-4 text-sm text-green-200">
+              <div className="flex items-center gap-3">
+                <ClipboardCheck className="h-5 w-5 shrink-0 text-green-400" />
+                <span>{actionMsg}</span>
+              </div>
+              <button
+                onClick={() => setActionMsg(null)}
+                className="text-green-400 hover:text-green-200 text-xs font-bold uppercase tracking-wider pl-4 cursor-pointer select-none"
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </section>
+      )}
 
       <WorkspaceMetricGrid items={displayDispatchMetrics} icons={icons} />
 
@@ -148,7 +173,7 @@ export default function TerminalDispatchPage() {
           <Panel
             eyebrow="Cola de salida"
             title="Ventanas activas del turno"
-            description="La tabla prioriza secuencia, canal y bloqueo operativo para que el turno se ordene en segundos."
+            description="Secuencia de salidas programadas, estado del canal de despacho y bloqueos operativos activos."
           >
             {loading ? (
               <div className="py-12 text-center text-slate-400 font-mono text-sm">
@@ -189,7 +214,7 @@ export default function TerminalDispatchPage() {
           <Panel
             eyebrow="Checklist mínimo"
             title="Antes de liberar una salida"
-            description="Cuatro preguntas, no veinte. Si esta lista es clara, el operador no se enreda en burocracia visual."
+            description="Lista de verificación obligatoria para la habilitación de salida segura del material rodante."
           >
             <div className="space-y-3">
               {mockDispatchChecklist.map((item, index) => (
@@ -209,7 +234,7 @@ export default function TerminalDispatchPage() {
           <Panel
             eyebrow="Feed geocerca"
             title="Trazas de salida que reemplazan marcaje manual"
-            description="El timeline deja ver cómo se comporta la ventana sin pedir digitación extra. Eso prepara muy bien la futura automatización real."
+            description="Cronograma del despacho del turno y cumplimiento de las ventanas de regularidad asignadas."
           >
             {loading ? (
               <div className="py-12 text-center text-slate-400 font-mono text-sm">

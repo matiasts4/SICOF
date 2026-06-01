@@ -2,8 +2,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import Link from "next/link";
-import { BarChart3, Gauge, ShieldCheck, TrendingUp } from "lucide-react";
+import { BarChart3, Gauge, ShieldCheck, TrendingUp, RefreshCw } from "lucide-react";
 
 import { PageIntro } from "@/components/page-intro";
 import { WorkspaceMetricGrid } from "@/components/workspace-metric-grid";
@@ -24,30 +23,30 @@ export default function CofKpisPage() {
   const [loading, setLoading] = useState(true);
   const [isRealData, setIsRealData] = useState(false);
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setLoading(true);
-        const [resKpi, resSummary] = await Promise.all([
-          fetch("/api/reports?action=get_kpis").then(r => r.json()),
-          fetch("/api/reports?action=get_operation_summary").then(r => r.json())
-        ]);
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      const [resKpi, resSummary] = await Promise.all([
+        fetch("/api/reports?action=get_kpis").then(r => r.json()),
+        fetch("/api/reports?action=get_operation_summary").then(r => r.json())
+      ]);
 
-        if (resKpi.status === "ok" && resSummary.status === "ok") {
-          setKpiMetrics(resKpi.data || []);
-          setSummaries(resSummary.data || []);
-          setIsRealData(true);
-        } else {
-          setIsRealData(false);
-        }
-      } catch (err) {
-        console.warn("Backend offline for COF KPIs, using mock fallback:", err);
+      if (resKpi.status === "ok" && resSummary.status === "ok") {
+        setKpiMetrics(resKpi.data || []);
+        setSummaries(resSummary.data || []);
+        setIsRealData(true);
+      } else {
         setIsRealData(false);
-      } finally {
-        setLoading(false);
       }
-    };
+    } catch (err) {
+      console.warn("Backend offline for COF KPIs, using mock fallback:", err);
+      setIsRealData(false);
+    } finally {
+      setLoading(false);
+    }
+  };
 
+  useEffect(() => {
     fetchData();
   }, []);
 
@@ -55,7 +54,7 @@ export default function CofKpisPage() {
   let displayPerformanceBands = mockPerformanceBands;
   let displayWatchouts = mockWatchouts;
 
-  if (isRealData && !loading) {
+  if (isRealData) {
     displayKpiMetrics = kpiMetrics.map((k) => ({
       label: k.label,
       value: k.value,
@@ -88,24 +87,20 @@ export default function CofKpisPage() {
     <main>
       <PageIntro
         badge={`COF · KPIs · ${isRealData ? "Datos Reales (TCP)" : "Modo Demostración (Mock)"}`}
-        title="La capa ejecutiva tiene que resumir la operación sin volverla decorativa"
-        description="Estos indicadores sirven para dirección, seguimiento y priorización. El diseño privilegia comparación clara y narrativa breve sobre cualquier artificio visual."
+        title="Indicadores de Desempeño Operacional"
+        description="Consola de indicadores claves de rendimiento (KPIs) para la supervisión ejecutiva y control de regularidad del servicio."
         tone="blue"
         tags={["Lectura ejecutiva", "Comparabilidad"]}
         actions={
           <>
-            <Link
-              href="/cof/terminales"
-              className="btn btn-secondary"
+            <button
+              onClick={fetchData}
+              disabled={loading}
+              className="btn btn-primary cursor-pointer gap-2"
             >
-              Volver a terminales
-            </Link>
-            <Link
-              href="/cof/reportes"
-              className="btn btn-primary"
-            >
-              Exportar visión
-            </Link>
+              <RefreshCw className="h-4 w-4" />
+              Sincronizar KPIs
+            </button>
           </>
         }
       />
@@ -118,7 +113,7 @@ export default function CofKpisPage() {
             font-display="true"
             eyebrow="Bandas de desempeño"
             title="Métricas que sostienen la conversación ejecutiva"
-            description="Cada bloque combina valor y tendencia para evitar la típica pantalla que muestra números sin decir si mejoran o empeoran."
+            description="Consolidado de cumplimiento y disponibilidad agregada con indicación de tendencia y desvíos."
           >
             {loading ? (
               <div className="py-12 text-center text-slate-400 font-mono text-sm">
@@ -142,7 +137,7 @@ export default function CofKpisPage() {
           <Panel
             eyebrow="Watchouts"
             title="Lecturas que explican el KPI"
-            description="Acá vive la capa de interpretación. Sin esto, el tablero sería solo una colección prolija de números."
+            description="Alertas operacionales específicas y puntos de control que inciden en el comportamiento de los KPIs."
           >
             {loading ? (
               <div className="py-12 text-center text-slate-400 font-mono text-sm">

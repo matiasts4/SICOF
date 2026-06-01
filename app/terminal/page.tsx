@@ -1,5 +1,8 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Activity, AlertTriangle, BatteryCharging, Bus, Clock3 } from "lucide-react";
+import { Activity, AlertTriangle, BatteryCharging, Bus, Clock3, RefreshCw, Shuffle, ClipboardCheck } from "lucide-react";
 
 import { PageIntro } from "@/components/page-intro";
 import { WorkspaceModuleGrid } from "@/components/workspace-module-grid";
@@ -8,40 +11,208 @@ import { StatusBadge } from "@/components/ui/status-badge";
 import { StatCard } from "@/components/ui/stat-card";
 import { MapPreview } from "@/components/ui/map-preview";
 import { terminalWorkspace } from "@/lib/sicof-navigation";
-import { departureTimeline, incidentLog, liveFleet, terminalAlerts, terminalMetrics, terminalSegments } from "@/lib/sicof-data";
+import { 
+  departureTimeline as mockTimeline, 
+  incidentLog as mockIncidents, 
+  liveFleet as mockFleet, 
+  terminalAlerts as mockAlerts, 
+  terminalMetrics as mockMetrics, 
+  terminalSegments as mockSegments 
+} from "@/lib/sicof-data";
+import type { Tone } from "@/lib/sicof-data";
 
 const icons = [Bus, Clock3, BatteryCharging, AlertTriangle];
 
 export default function TerminalPage() {
+  const [terminalId, setTerminalId] = useState(1);
+  const [buses, setBuses] = useState<any[]>([]);
+  const [assignments, setAssignments] = useState<any[]>([]);
+  const [segments, setSegments] = useState<any[]>([]);
+  const [incidents, setIncidents] = useState<any[]>([]);
+  const [socAlerts, setSocAlerts] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [isRealData, setIsRealData] = useState(false);
+  const [actionMsg, setActionMsg] = useState<string | null>(null);
+
+  const fetchData = async (showLoading = false) => {
+    try {
+      if (showLoading) {
+        setLoading(true);
+      }
+      const [resBuses, resAssignments, resSegments, resIncidents, resSocAlerts] = await Promise.all([
+        fetch(`/api/fleet?action=get_buses&terminal_id=${terminalId}`).then(r => r.json()),
+        fetch(`/api/fleet?action=get_assignments&terminal_id=${terminalId}`).then(r => r.json()),
+        fetch(`/api/fleet?action=get_segments&terminal_id=${terminalId}`).then(r => r.json()),
+        fetch(`/api/incidents?action=get_incidents&terminal_id=${terminalId}`).then(r => r.json()),
+        fetch(`/api/soc?action=get_alerts&terminal_id=${terminalId}`).then(r => r.json())
+      ]);
+
+      if (
+        resBuses.status === "ok" &&
+        resAssignments.status === "ok" &&
+        resSegments.status === "ok"
+      ) {
+        setBuses(resBuses.data || []);
+        setAssignments(resAssignments.data || []);
+        setSegments(resSegments.data || []);
+        setIncidents(resIncidents.status === "ok" ? resIncidents.data : []);
+        setSocAlerts(resSocAlerts.status === "ok" ? resSocAlerts.data : []);
+        setIsRealData(true);
+      } else {
+        setIsRealData(false);
+      }
+    } catch (err) {
+      console.warn("SOA backend services offline, falling back to mock data.", err);
+      setIsRealData(false);
+    } finally {
+      if (showLoading) {
+        setLoading(false);
+      }
+    }
+  };
+
+  useEffect(() => {
+    const userStr = localStorage.getItem("sicof_user");
+    if (userStr) {
+      try {
+        const user = JSON.parse(userStr);
+        if (user.terminal_id) setTerminalId(user.terminal_id);
+      } catch (e) {
+        console.error(e);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchData(true);
+    const interval = setInterval(() => fetchData(false), 6000);
+    return () => clearInterval(interval);
+  }, [terminalId]);
+
+  const handleToggleTerminal = () => {
+    const nextId = terminalId === 1 ? 2 : 1;
+    setTerminalId(nextId);
+    const userStr = localStorage.getItem("sicof_user");
+    if (userStr) {
+      try {
+        const user = JSON.parse(userStr);
+        user.terminal_id = nextId;
+        localStorage.setItem("sicof_user", JSON.stringify(user));
+      } catch (e) {}
+    }
+    setActionMsg(`Monitoreo cambiado a Terminal ${nextId === 1 ? "El Roble (ID: 1)" : "Los Libertadores (ID: 2)"}`);
+    setTimeout(() => setActionMsg(null), 10000);
+  };
+
+  // Map real data to display lists with fallback to mock data
+  let displayMetrics = mockMetrics;
+  let displaySegments = mockSegments;
+  let displayLiveFleet = mockFleet;
+  let displayIncidents = mockIncidents;
+
+  if (isRealData) {
+    // 1. Metrics Calculation
+    const totalBuses = buses.length;
+    const assignedCount = assignments.length;
+    const readyBuses = Math.max(0, totalBuses - assignedCount);
+    const activeIncidents = incidents.filter(i => i.estado !== "Cerrado").length;
+    const urgentSoC = socAlerts.length;
+
+    displayMetrics = [
+      { label: "Buses listos", value: String(readyBuses), detail: `${buses.filter(b => b.tipo_energia === "Eléctrico").length} Eléctricos`, tone: "green" as Tone },
+      { label: "Salidas activas", value: String(assignedCount), detail: "Próximas salidas en turno", tone: "blue" as Tone },
+      { label: "Alertas SoC", value: String(urgentSoC), detail: "Bajo autonomía mínima", tone: "orange" as Tone },
+      { label: "Incidentes abiertos", value: String(activeIncidents), detail: "Requieren revisión", tone: "red" as Tone },
+    ];
+
+    // 2. Segments Mapping
+    displaySegments = segments;
+
+    // 3. Live Fleet Table Mapping
+    if (assignments.length > 0) {
+      displayLiveFleet = assignments.map((asg) => {
+        // Find corresponding SoC alert or generate normal value
+        const matchingAlert = socAlerts.find(alert => alert.id_bus === asg.id_bus);
+        const socVal = asg.tipo_energia === "Eléctrico" 
+          ? (matchingAlert ? `${Math.round(matchingAlert.nivel_carga)}%` : "85%") 
+          : "—";
+        const statusLabel = asg.tipo_energia === "Eléctrico" && matchingAlert 
+          ? "Umbral bajo" 
+          : "Listo";
+        const toneVal = statusLabel === "Umbral bajo" ? "orange" : "green";
+
+        return {
+          padron: asg.patente || `BUS-${asg.id_bus}`,
+          route: asg.codigo_recorrido,
+          driver: asg.conductor_nombre,
+          soc: socVal,
+          eta: asg.fecha_hora_inicio.substring(11, 16),
+          status: statusLabel,
+          tone: toneVal as Tone
+        };
+      });
+    }
+
+    // 4. Incidents List Mapping
+    if (incidents.length > 0) {
+      displayIncidents = incidents.slice(0, 3).map((inc) => ({
+        type: inc.tipo,
+        bus: inc.patente || `BUS-${inc.id_bus}`,
+        detail: inc.descripcion,
+        status: inc.estado,
+        tone: inc.estado === "Abierto" ? "red" : inc.estado === "Escalado" ? "orange" : "blue" as Tone
+      }));
+    }
+  }
+
   return (
     <main>
       <PageIntro
         badge="Vista Despachador de Terminal"
         title="Despacho enfocado, sin ruido y con lectura inmediata del estado del patio"
-        description="La interfaz del despachador prioriza preparación de salida, flota segmentada, autonomía eléctrica y alertas de frecuencia. Todo lo demás pasa a segundo plano, como debe ser."
         tone="green"
-        tags={["Terminal El Roble", "Operación en vivo"]}
+        tags={[`Terminal ID: ${terminalId}`, isRealData ? "Datos Reales (TCP)" : "Modo Demostración"]}
         actions={
           <>
-            <Link
-              href="/terminal/despacho"
-              className="btn btn-secondary"
+            <button
+              onClick={handleToggleTerminal}
+              className="btn btn-primary cursor-pointer gap-2"
             >
-              Abrir despacho del turno
-            </Link>
-            <Link
-              href="/terminal/energia"
-              className="btn btn-primary"
+              <Shuffle className="h-4 w-4" />
+              Cambiar Terminal
+            </button>
+            <button
+              onClick={() => fetchData(true)}
+              className="btn btn-secondary cursor-pointer"
             >
-              Revisar energía
-            </Link>
+              <RefreshCw className="h-4 w-4" />
+            </button>
           </>
         }
       />
 
+      {actionMsg && (
+        <section className="section-shell pt-0 pb-4">
+          <div className="page-shell">
+            <div className="flex items-center justify-between gap-3 rounded-2xl border border-green-500/20 bg-green-500/10 p-4 text-sm text-green-200">
+              <div className="flex items-center gap-3">
+                <ClipboardCheck className="h-5 w-5 shrink-0 text-green-400" />
+                <span>{actionMsg}</span>
+              </div>
+              <button
+                onClick={() => setActionMsg(null)}
+                className="text-green-400 hover:text-green-200 text-xs font-bold uppercase tracking-wider pl-4 cursor-pointer select-none"
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </section>
+      )}
+
       <section className="section-shell pt-0">
         <div className="page-shell grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          {terminalMetrics.map((metric, index) => {
+          {displayMetrics.map((metric, index) => {
             const Icon = icons[index] ?? Activity;
 
             return (
@@ -63,7 +234,7 @@ export default function TerminalPage() {
           <Panel 
             eyebrow="Monitoreo Georeferenciado" 
             title="Ubicación de flota en tiempo real" 
-            description="Visualización de buses en ruta y estado de carga por geocerca. Basado en Mapbox Standard Dark."
+            description="Posición geográfica de unidades en ruta y estado de carga de batería."
           >
             <MapPreview className="h-[400px]" />
           </Panel>
@@ -75,19 +246,19 @@ export default function TerminalPage() {
           <Panel
             eyebrow="Flota segmentada"
             title="Segmentos del patio"
-            description="Cada bloque muestra buses y conductores disponibles dentro del terminal. Sin contaminación de otros patios."
+            description="Disponibilidad de material rodante y conductores asignados a este patio de operaciones."
           >
             <div className="space-y-3">
-              {terminalSegments.map((segment) => (
+              {displaySegments.map((segment) => (
                 <div key={segment.name} className="rounded-2xl border border-white/8 bg-white/4 p-4">
                   <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div>
+                     <div>
                       <h3 className="text-base font-semibold text-slate-100">{segment.name}</h3>
                       <p className="mt-1 text-sm text-slate-400">
                         {segment.buses} buses · {segment.drivers} conductores
                       </p>
                     </div>
-                    <StatusBadge label={segment.status} tone={segment.tone} />
+                    <StatusBadge label={segment.status} tone={segment.tone as Tone} />
                   </div>
                 </div>
               ))}
@@ -97,7 +268,7 @@ export default function TerminalPage() {
           <Panel
             eyebrow="Energía y Frecuencia"
             title="Fleet board para salida inminente"
-            description="Lectura conjunta de padrón, conductor, SoC y ETA de salida. Esa combinación es la que destraba el despacho real."
+            description="Estado de preparación, SoC de batería y tiempo estimado de salida para unidades programadas."
           >
             <div className="overflow-x-auto">
               <table className="min-w-full border-separate border-spacing-y-2 text-left text-sm text-slate-300">
@@ -111,7 +282,7 @@ export default function TerminalPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {liveFleet.map((bus) => (
+                  {displayLiveFleet.map((bus) => (
                     <tr key={bus.padron} className="bg-white/4">
                       <td className="rounded-l-2xl border-y border-l border-white/8 px-4 py-3 font-medium text-slate-100">
                         {bus.padron} · {bus.route}
@@ -136,10 +307,10 @@ export default function TerminalPage() {
           <Panel
             eyebrow="Marcaje automático"
             title="Timeline de salida por geocerca"
-            description="Esta vista cuenta la historia del despacho sin pedirle trabajo manual extra al operador. Ese es el valor real de la automatización."
+            description="Eventos automáticos de salida y paso por geocercas registrados durante el turno."
           >
             <div className="space-y-4">
-              {departureTimeline.map((item) => (
+              {mockTimeline.map((item) => (
                 <div key={`${item.time}-${item.title}`} className="flex gap-4">
                   <div className="flex flex-col items-center">
                     <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-500/12 font-mono text-sm font-semibold text-blue-200">
@@ -160,10 +331,10 @@ export default function TerminalPage() {
             <Panel
               eyebrow="Alertas preventivas"
               title="Prioridades del turno"
-              description="Tres alertas máximas. Nada de llenar la pantalla con ruido operacional."
+              description="Alertas críticas prioritarias del turno que requieren acción inmediata."
             >
               <div className="space-y-3">
-                {terminalAlerts.map((alert) => (
+                {mockAlerts.map((alert) => (
                   <div key={alert.label} className="rounded-2xl border border-white/8 bg-white/4 p-4">
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <h3 className="text-base font-semibold text-slate-100">{alert.label}</h3>
@@ -178,10 +349,10 @@ export default function TerminalPage() {
             <Panel
               eyebrow="Incidentes operativos"
               title="Bitácora mínima para escalar sin fricción"
-              description="Aunque esta vista vive mejor en COF, el despachador igual necesita registrar y ver el contexto inmediato."
+              description="Registro y seguimiento inmediato de novedades en el terminal."
             >
               <div className="space-y-3">
-                {incidentLog.map((incident) => (
+                {displayIncidents.map((incident) => (
                   <div key={`${incident.type}-${incident.bus}`} className="rounded-2xl border border-white/8 bg-white/4 p-4">
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <div>
@@ -201,7 +372,7 @@ export default function TerminalPage() {
       <WorkspaceModuleGrid
         eyebrow="Rutas del despacho"
         title="El workspace terminal se expande en cinco vistas operacionales"
-        description="Cada módulo resuelve una decisión distinta del patio, pero mantiene el mismo lenguaje visual y el mismo contexto compartido en la barra superior."
+        description="Acceso a los módulos específicos para la gestión del terminal."
         items={terminalWorkspace.links.slice(1)}
       />
     </main>

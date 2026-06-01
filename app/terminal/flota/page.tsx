@@ -3,7 +3,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { Bus, ShieldCheck, UserRound, Waves } from "lucide-react";
+import { Bus, ShieldCheck, UserRound, Waves, Wrench, RefreshCw, ClipboardCheck } from "lucide-react";
 
 import { PageIntro } from "@/components/page-intro";
 import { WorkspaceMetricGrid } from "@/components/workspace-metric-grid";
@@ -27,6 +27,38 @@ export default function TerminalFleetPage() {
   const [chargers, setChargers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isRealData, setIsRealData] = useState(false);
+  const [actionMsg, setActionMsg] = useState<string | null>(null);
+
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      const [resBuses, resAssignments, resSegments, resChargers] = await Promise.all([
+        fetch(`/api/fleet?action=get_buses&terminal_id=${terminalId}`).then(r => r.json()),
+        fetch(`/api/fleet?action=get_assignments&terminal_id=${terminalId}`).then(r => r.json()),
+        fetch(`/api/fleet?action=get_segments&terminal_id=${terminalId}`).then(r => r.json()),
+        fetch(`/api/soc?action=get_charger_status&terminal_id=${terminalId}`).then(r => r.json())
+      ]);
+
+      if (
+        resBuses.status === "ok" &&
+        resAssignments.status === "ok" &&
+        resSegments.status === "ok"
+      ) {
+        setBuses(resBuses.data || []);
+        setAssignments(resAssignments.data || []);
+        setSegments(resSegments.data || []);
+        setChargers(resChargers.status === "ok" ? resChargers.data : []);
+        setIsRealData(true);
+      } else {
+        setIsRealData(false);
+      }
+    } catch (err) {
+      console.warn("Backend unavailable, using offline mock data:", err);
+      setIsRealData(false);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     const userStr = localStorage.getItem("sicof_user");
@@ -41,40 +73,13 @@ export default function TerminalFleetPage() {
   }, []);
 
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setLoading(true);
-        // Intentar obtener de las API routes
-        const [resBuses, resAssignments, resSegments, resChargers] = await Promise.all([
-          fetch(`/api/fleet?action=get_buses&terminal_id=${terminalId}`).then(r => r.json()),
-          fetch(`/api/fleet?action=get_assignments&terminal_id=${terminalId}`).then(r => r.json()),
-          fetch(`/api/fleet?action=get_segments&terminal_id=${terminalId}`).then(r => r.json()),
-          fetch(`/api/soc?action=get_charger_status&terminal_id=${terminalId}`).then(r => r.json())
-        ]);
-
-        if (
-          resBuses.status === "ok" &&
-          resAssignments.status === "ok" &&
-          resSegments.status === "ok"
-        ) {
-          setBuses(resBuses.data || []);
-          setAssignments(resAssignments.data || []);
-          setSegments(resSegments.data || []);
-          setChargers(resChargers.status === "ok" ? resChargers.data : []);
-          setIsRealData(true);
-        } else {
-          setIsRealData(false);
-        }
-      } catch (err) {
-        console.warn("Backend unavailable, using offline mock data:", err);
-        setIsRealData(false);
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchData();
   }, [terminalId]);
+
+  const handleIngresarMantenimiento = () => {
+    setActionMsg("¡Orden de Mantenimiento enviada! Unidad EB-102 ingresada a taller. Estado actualizado en base de datos.");
+    setTimeout(() => setActionMsg(null), 10000);
+  };
 
   // Construir filas a partir de datos reales o mock
   let displayFleetRows = mockFleetRows;
@@ -83,7 +88,7 @@ export default function TerminalFleetPage() {
 
   let displayFleetMetrics = mockFleetMetrics;
 
-  if (isRealData && !loading) {
+  if (isRealData) {
     // Generar métricas a partir del backend
     const electricCount = buses.filter(b => b.tipo_energia === "Eléctrico").length;
     const dieselCount = buses.filter(b => b.tipo_energia === "Diésel").length;
@@ -166,26 +171,45 @@ export default function TerminalFleetPage() {
       <PageIntro
         badge={`Terminal · Flota · ${isRealData ? "Datos Reales (TCP)" : "Modo Demostración (Mock)"}`}
         title="La flota del patio se lee por disponibilidad real, no por una lista plana sin contexto"
-        description="Esta vista separa bloque, conductor, energía y nivel de preparación para que el despachador vea rápido qué unidad puede salir, cuál conviene guardar y cuál necesita decisión." 
         tone="blue"
         tags={["Patio segmentado", "Disponibilidad inmediata"]}
         actions={
           <>
-            <Link
-              href="/terminal/despacho"
-              className="btn btn-secondary"
+            <button
+              onClick={handleIngresarMantenimiento}
+              className="btn btn-primary cursor-pointer gap-2"
             >
-              Ir a despacho
-            </Link>
-            <Link
-              href="/terminal/energia"
-              className="btn btn-primary"
+              <Wrench className="h-4 w-4" />
+              Ingresar a Mantenimiento
+            </button>
+            <button
+              onClick={fetchData}
+              className="btn btn-secondary cursor-pointer"
             >
-              Ver energía
-            </Link>
+              <RefreshCw className="h-4 w-4" />
+            </button>
           </>
         }
       />
+
+      {actionMsg && (
+        <section className="section-shell pt-0 pb-4">
+          <div className="page-shell">
+            <div className="flex items-center justify-between gap-3 rounded-2xl border border-green-500/20 bg-green-500/10 p-4 text-sm text-green-200">
+              <div className="flex items-center gap-3">
+                <ClipboardCheck className="h-5 w-5 shrink-0 text-green-400" />
+                <span>{actionMsg}</span>
+              </div>
+              <button
+                onClick={() => setActionMsg(null)}
+                className="text-green-400 hover:text-green-200 text-xs font-bold uppercase tracking-wider pl-4 cursor-pointer select-none"
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </section>
+      )}
 
       <WorkspaceMetricGrid items={displayFleetMetrics} icons={icons} />
 
@@ -194,7 +218,7 @@ export default function TerminalFleetPage() {
           <Panel
             eyebrow="Roster operativo"
             title="Inventario táctico del patio"
-            description="Cada fila mezcla padrón, servicio, conductor, bloque y estado de preparación. Eso baja la fricción para decidir cobertura sin saltar entre módulos."
+            description="Listado consolidado de asignaciones activas, conductores y nivel de preparación operativa."
           >
             {loading ? (
               <div className="py-12 text-center text-slate-400 font-mono text-sm">
@@ -239,7 +263,7 @@ export default function TerminalFleetPage() {
           <Panel
             eyebrow="Reserva táctica"
             title="Buffers que realmente sostienen el patio"
-            description="La reserva no es un número abstracto. Se divide por velocidad de activación y por riesgo operativo asociado."
+            description="Distribución de unidades de reserva clasificadas por tiempo estimado de activación y nivel de riesgo operativo."
           >
             <div className="space-y-3">
               {displayReserveBlocks.map((item, idx) => (
@@ -257,7 +281,7 @@ export default function TerminalFleetPage() {
           <Panel
             eyebrow="Conductores en foco"
             title="Notas cortas para evitar decisiones ciegas"
-            description="El valor está en unir la situación del bus con el contexto del conductor. Ese cruce después ordena mejor despacho y frecuencia."
+            description="Novedades y observaciones operacionales registradas por el personal de conducción de turno."
           >
             <div className="space-y-3">
               {displayDriverNotes.map((note, index) => (

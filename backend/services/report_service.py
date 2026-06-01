@@ -153,12 +153,48 @@ def handle_get_report_catalog(params: dict) -> dict:
     return {"status": "ok", "data": catalog}
 
 
+
+def handle_get_reports_list(params: dict) -> dict:
+    """Retorna la lista de reportes disponibles para descarga."""
+    rows = query("SELECT id_reporte, nombre, tipo, fecha_creacion, url_archivo, creador FROM reporte_descarga ORDER BY fecha_creacion DESC")
+    return {"status": "ok", "data": rows}
+
+
+def handle_request_report(params: dict) -> dict:
+    """Crea una solicitud de reporte e inserta la descarga simulada en la base de datos."""
+    import time
+    nombre = params.get("nombre", "")
+    tipo = params.get("tipo", "")
+    creador = params.get("creador", "system")
+
+    if not nombre or not tipo:
+        return {"status": "error", "message": "Nombre y tipo requeridos"}
+
+    fecha_creacion = time.strftime("%Y-%m-%dT%H:%M:%S")
+    url_archivo = f"/downloads/reportes/{nombre}"
+
+    query(
+        "INSERT INTO reporte_descarga (nombre, tipo, fecha_creacion, url_archivo, creador) VALUES (?, ?, ?, ?, ?)",
+        (nombre, tipo, fecha_creacion, url_archivo, creador)
+    )
+
+    # Registrar acción en auditoría mediante llamada interna (simulada o directa en DB)
+    query(
+        "INSERT INTO auditoria (username, accion, tabla_afectada, detalles, fecha_hora) VALUES (?, ?, ?, ?, ?)",
+        (creador, "CREATE", "reporte_descarga", f"Generó reporte: {nombre} ({tipo})", fecha_creacion)
+    )
+
+    return {"status": "ok", "message": "Reporte generado correctamente"}
+
+
 ACTIONS = {
     "get_operation_summary": handle_get_operation_summary,
     "get_terminal_health": handle_get_terminal_health,
     "get_kpis": handle_get_kpis,
     "get_daily_report": handle_get_daily_report,
     "get_report_catalog": handle_get_report_catalog,
+    "get_reports_list": handle_get_reports_list,
+    "request_report": handle_request_report,
 }
 
 

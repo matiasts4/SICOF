@@ -11,34 +11,26 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const { searchParams } = new URL(request.url);
-    const action = searchParams.get("action") ?? "get_kpis";
-    const terminal_id_str = searchParams.get("terminal_id");
-    const format = searchParams.get("format");
-
-    const terminal_id = terminal_id_str ? parseInt(terminal_id_str, 10) : null;
-
-    // Control de acceso por terminal (RF-003):
-    // Si el usuario no es de nivel COF (global) y tiene terminal asignado,
-    // bloquear solicitudes para otros terminales.
-    if (
-      user.rol !== "Admin COF" && 
-      user.rol !== "Admin TI" && 
-      user.terminal_id !== null && 
-      terminal_id !== null && 
-      user.terminal_id !== terminal_id
-    ) {
+    // Permitir solo a administradores (TI o COF) acceder a datos administrativos
+    if (user.rol !== "Admin TI" && user.rol !== "Admin COF") {
       return NextResponse.json(
-        { status: "error", message: "Acceso denegado a este terminal" },
+        { status: "error", message: "Acceso denegado. Rol insuficiente." },
         { status: 403 }
       );
     }
 
-    const params: Record<string, unknown> = {};
-    if (terminal_id !== null) params.terminal_id = terminal_id;
-    if (format) params.format = format;
+    const { searchParams } = new URL(request.url);
+    const action = searchParams.get("action") ?? "get_params";
+    
+    // Convert all search parameters into a params object
+    const params: Record<string, string | null> = {};
+    searchParams.forEach((value, key) => {
+      if (key !== "action") {
+        params[key] = value;
+      }
+    });
 
-    const result = await sendToService("repor", { action, params });
+    const result = await sendToService("segur", { action, params });
     return NextResponse.json(result);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Error desconocido";
@@ -56,22 +48,29 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const body = await request.json();
-    const action = body.action || "request_report";
-    const params = body.params || {};
-
-    // Inyectar el username real y restringir por terminal si procede
-    params.creador = user.username;
-    if (user.rol !== "Admin COF" && user.rol !== "Admin TI" && user.terminal_id !== null) {
-      params.terminal_id = user.terminal_id;
+    if (user.rol !== "Admin TI" && user.rol !== "Admin COF") {
+      return NextResponse.json(
+        { status: "error", message: "Acceso denegado. Rol insuficiente." },
+        { status: 403 }
+      );
     }
 
-    const result = await sendToService("repor", { action, params });
+    const body = await request.json();
+    const action = body.action;
+    const params = body.params || {};
+
+    if (!action) {
+      return NextResponse.json({ status: "error", message: "Acción requerida" }, { status: 400 });
+    }
+
+    // Inyectar el username del operador autenticado para fines de auditoría
+    params.username = user.username;
+
+    const result = await sendToService("segur", { action, params });
     return NextResponse.json(result);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Error desconocido";
     return NextResponse.json({ status: "error", message: `Error SOA: ${message}` }, { status: 503 });
   }
 }
-
 
