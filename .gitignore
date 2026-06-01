@@ -15,8 +15,24 @@ informe1Latex.tex
 informe1.latex.text
 InstruccionesInforme2.md
 instrucciones informe2.md
+informe2final.md
+
 
 # Carpetas de Graphify
 graphify-out/
 Graphify/
 graphify/
+
+# Informes nuevos
+informe2.md
+Informe2.md
+
+# Herramientas de SDD y agentes
+openspec/
+.atl/
+
+# Python cache
+__pycache__/
+**/__pycache__/
+*.pyc
+

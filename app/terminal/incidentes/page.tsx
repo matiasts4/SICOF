@@ -104,7 +104,7 @@ export default function TerminalIncidentsPage() {
         setDescription("");
         setIsFormOpen(false);
         fetchData(); // Refrescar lista
-        setTimeout(() => setSuccessMsg(null), 4000);
+        setTimeout(() => setSuccessMsg(null), 10000);
       } else {
         alert("Error al registrar: " + data.message);
       }
@@ -120,7 +120,7 @@ export default function TerminalIncidentsPage() {
   const displayEscalationFlow = mockEscalationFlow;
   const displayEvidenceChecklist = mockEvidenceChecklist;
 
-  if (isRealData && !loading) {
+  if (isRealData) {
     const totalCount = incidents.length;
     const openCount = incidents.filter(i => i.estado === "Abierto").length;
     const escalatedCount = incidents.filter(i => i.estado === "Escalado").length;
@@ -157,8 +157,8 @@ export default function TerminalIncidentsPage() {
     <main>
       <PageIntro
         badge={`Terminal · Incidentes · ${isRealData ? "Datos Reales (TCP)" : "Modo Demostración (Mock)"}`}
-        title="El incidente tiene que registrar contexto útil sin romper el ritmo del despacho"
-        description="La carga visual acá es mínima a propósito: severidad, evidencia, servicio afectado y ruta de escalamiento. Con eso ya se sostiene una operación mucho más clara." 
+        title="Registro de Novedades e Incidentes"
+        description="Gestión y escalamiento de novedades operativas, contingencias en ruta y material rodante afectado." 
         tone="red"
         tags={["Evidencia mínima", "Escalamiento"]}
         actions={
@@ -185,9 +185,17 @@ export default function TerminalIncidentsPage() {
       {successMsg && (
         <section className="section-shell pt-0 pb-4">
           <div className="page-shell">
-            <div className="flex items-center gap-3 rounded-2xl border border-green-500/20 bg-green-500/10 p-4 text-sm text-green-200">
-              <ClipboardCheck className="h-5 w-5 shrink-0 text-green-400" />
-              <span>{successMsg}</span>
+            <div className="flex items-center justify-between gap-3 rounded-2xl border border-green-500/20 bg-green-500/10 p-4 text-sm text-green-200">
+              <div className="flex items-center gap-3">
+                <ClipboardCheck className="h-5 w-5 shrink-0 text-green-400" />
+                <span>{successMsg}</span>
+              </div>
+              <button
+                onClick={() => setSuccessMsg(null)}
+                className="text-green-400 hover:text-green-200 text-xs font-bold uppercase tracking-wider pl-4 cursor-pointer select-none"
+              >
+                Cerrar
+              </button>
             </div>
           </div>
         </section>
@@ -296,7 +304,7 @@ export default function TerminalIncidentsPage() {
           <Panel
             eyebrow="Casos abiertos"
             title="Incidentes locales con el mínimo contexto necesario"
-            description="Cada tarjeta deja claro qué pasó, dónde pega y si el caso se queda local o ya exige coordinación más arriba."
+            description="Listado de incidentes activos detectados en patio o reportados en ruta."
           >
             {loading ? (
               <div className="py-12 text-center text-slate-400 font-mono text-sm">
@@ -329,7 +337,7 @@ export default function TerminalIncidentsPage() {
           <Panel
             eyebrow="Checklist de evidencia"
             title="Qué no puede faltar antes de escalar"
-            description="La mejor UX para incidentes no es meter mil campos: es obligar visualmente a registrar lo que realmente explica el caso."
+            description="Requisitos mínimos de información y registros requeridos para el escalamiento de novedades."
           >
             <div className="space-y-3">
               {displayEvidenceChecklist.map((item, index) => (
@@ -348,7 +356,7 @@ export default function TerminalIncidentsPage() {
           <Panel
             eyebrow="Ruta de escalamiento"
             title="Cuándo se queda en terminal y cuándo sube de nivel"
-            description="Esta separación ordena perfecto la futura lógica real de ownership, notificaciones y tiempos de respuesta."
+            description="Protocolo de asignación de responsabilidades y flujo de comunicación según criticidad."
           >
             <div className="grid gap-3 lg:grid-cols-3">
               {displayEscalationFlow.map((item, idx) => (

@@ -3,7 +3,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { Gauge, MoveRight, Orbit, TimerReset } from "lucide-react";
+import { Gauge, MoveRight, Orbit, TimerReset, Shuffle, RefreshCw, ClipboardCheck } from "lucide-react";
 
 import { PageIntro } from "@/components/page-intro";
 import { WorkspaceMetricGrid } from "@/components/workspace-metric-grid";
@@ -25,6 +25,30 @@ export default function TerminalFrequencyPage() {
   const [corridors, setCorridors] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isRealData, setIsRealData] = useState(false);
+  const [actionMsg, setActionMsg] = useState<string | null>(null);
+
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      const [resIntervals, resCorridors] = await Promise.all([
+        fetch(`/api/frequency?action=get_intervals&terminal_id=${terminalId}`).then(r => r.json()),
+        fetch(`/api/frequency?action=get_corridor_status&terminal_id=${terminalId}`).then(r => r.json())
+      ]);
+
+      if (resIntervals.status === "ok" && resCorridors.status === "ok") {
+        setIntervals(resIntervals.data || []);
+        setCorridors(resCorridors.data || []);
+        setIsRealData(true);
+      } else {
+        setIsRealData(false);
+      }
+    } catch (err) {
+      console.warn("Backend unavailable for frequency page, using mock fallback:", err);
+      setIsRealData(false);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     const userStr = localStorage.getItem("sicof_user");
@@ -39,38 +63,20 @@ export default function TerminalFrequencyPage() {
   }, []);
 
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setLoading(true);
-        const [resIntervals, resCorridors] = await Promise.all([
-          fetch(`/api/frequency?action=get_intervals&terminal_id=${terminalId}`).then(r => r.json()),
-          fetch(`/api/frequency?action=get_corridor_status&terminal_id=${terminalId}`).then(r => r.json())
-        ]);
-
-        if (resIntervals.status === "ok" && resCorridors.status === "ok") {
-          setIntervals(resIntervals.data || []);
-          setCorridors(resCorridors.data || []);
-          setIsRealData(true);
-        } else {
-          setIsRealData(false);
-        }
-      } catch (err) {
-        console.warn("Backend unavailable for frequency page, using mock fallback:", err);
-        setIsRealData(false);
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchData();
   }, [terminalId]);
+
+  const handleRegularizarFlujo = () => {
+    setActionMsg("¡Espaciamiento automático enviado a conductores! Ajustando intervalo en ruta para amortiguar el gap.");
+    setTimeout(() => setActionMsg(null), 10000);
+  };
 
   let displayFrequencyMetrics = mockFrequencyMetrics;
   let displayServiceWindows = mockServiceWindows;
   let displayCorridorPressure = mockCorridorPressure;
   let displayDispatchMoves = mockDispatchMoves;
 
-  if (isRealData && !loading) {
+  if (isRealData) {
     const totalRoutes = intervals.length;
     const criticalAlerts = intervals.filter(i => i.severity === "Crítico").length;
     const warnAlerts = intervals.filter(i => i.severity === "Advertencia").length;
@@ -112,26 +118,45 @@ export default function TerminalFrequencyPage() {
       <PageIntro
         badge={`Terminal · Frecuencia · ${isRealData ? "Datos Reales (TCP)" : "Modo Demostración (Mock)"}`}
         title="La frecuencia se protege desde el patio mucho antes de que el problema explote en COF"
-        description="Este módulo muestra la presión por servicio, la próxima salida crítica y los movimientos tácticos que pueden cerrar brechas antes de escalar." 
         tone="orange"
         tags={["Regularidad", "Ventanas críticas"]}
         actions={
           <>
-            <Link
-              href="/terminal/despacho"
-              className="btn btn-secondary"
+            <button
+              onClick={handleRegularizarFlujo}
+              className="btn btn-primary cursor-pointer gap-2"
             >
-              Ajustar despacho
-            </Link>
-            <Link
-              href="/cof/frecuencia"
-              className="btn btn-primary"
+              <Shuffle className="h-4 w-4" />
+              Regularizar Flujo
+            </button>
+            <button
+              onClick={fetchData}
+              className="btn btn-secondary cursor-pointer"
             >
-              Escalar a COF
-            </Link>
+              <RefreshCw className="h-4 w-4" />
+            </button>
           </>
         }
       />
+
+      {actionMsg && (
+        <section className="section-shell pt-0 pb-4">
+          <div className="page-shell">
+            <div className="flex items-center justify-between gap-3 rounded-2xl border border-green-500/20 bg-green-500/10 p-4 text-sm text-green-200">
+              <div className="flex items-center gap-3">
+                <ClipboardCheck className="h-5 w-5 shrink-0 text-green-400" />
+                <span>{actionMsg}</span>
+              </div>
+              <button
+                onClick={() => setActionMsg(null)}
+                className="text-green-400 hover:text-green-200 text-xs font-bold uppercase tracking-wider pl-4 cursor-pointer select-none"
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </section>
+      )}
 
       <WorkspaceMetricGrid items={displayFrequencyMetrics} icons={icons} />
 
@@ -140,7 +165,7 @@ export default function TerminalFrequencyPage() {
           <Panel
             eyebrow="Servicios en ventana"
             title="Brechas y próxima salida por corredor"
-            description="La tabla permite ver dónde aguantar, dónde reasignar y dónde ya conviene avisar al nivel superior."
+            description="Brechas e intervalos proyectados en cabecera por corredor operativo."
           >
             {loading ? (
               <div className="py-12 text-center text-slate-400 font-mono text-sm">
@@ -179,7 +204,7 @@ export default function TerminalFrequencyPage() {
           <Panel
             eyebrow="Presión por corredor"
             title="Dónde conviene mirar primero"
-            description="COF ve red. Terminal necesita saber cuál corredor lo está apretando ahora mismo."
+            description="Nivel de congestión e intervalos en los principales corredores de la red."
           >
             <div className="space-y-3">
               {displayCorridorPressure.map((item, idx) => (
@@ -201,7 +226,7 @@ export default function TerminalFrequencyPage() {
           <Panel
             eyebrow="Jugadas del turno"
             title="Tres movimientos que ordenan la ventana sin agrandar el problema"
-            description="Acá la UI propone acciones concretas. Esa claridad después sirve muchísimo para diseñar lógica real y estados de aprobación."
+            description="Propuestas de regulación automática de frecuencias basadas en el estado de ruta."
           >
             <div className="grid gap-3 lg:grid-cols-3">
               {displayDispatchMoves.map((move, index) => (

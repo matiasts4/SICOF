@@ -1,13 +1,11 @@
 import type { ReactNode } from "react";
-
 import { StatusBadge } from "@/components/ui/status-badge";
-import { Reveal } from "@/components/ui/reveal";
 import type { Tone } from "@/lib/sicof-data";
 
 type PageIntroProps = {
   badge: string;
   title: string;
-  description: string;
+  description?: string;
   tone?: Tone;
   tags?: string[];
   actions?: ReactNode;
@@ -16,39 +14,44 @@ type PageIntroProps = {
 export function PageIntro({
   badge,
   title,
-  description,
   tone = "blue",
   tags = [],
   actions,
 }: PageIntroProps) {
+  // Extract category from badge (e.g. "COF Hub · Demo" -> "COF Hub")
+  const category = badge.split(" · ")[0];
+
   return (
-    <section className="section-shell pt-6">
-      <div className="page-shell">
-        <div className="flex flex-col gap-8 lg:flex-row lg:items-end lg:justify-between">
-          <Reveal className="max-w-3xl space-y-5">
-            <StatusBadge label={badge} tone={tone} />
-            <div className="space-y-4">
-              <h1 className="font-display text-balance text-[clamp(2.9rem,5vw,4.8rem)] font-semibold leading-[0.95] tracking-[-0.05em] text-[var(--text-primary)]">
-                {title}
-              </h1>
-              <p className="max-w-[68ch] text-pretty text-base leading-7 text-[var(--text-secondary)] sm:text-[1.05rem] sm:leading-8">{description}</p>
-            </div>
-            {tags.length > 0 ? (
-              <div className="flex flex-wrap gap-2">
-                {tags.map((tag) => (
-                  <span
-                    key={tag}
-                    className="glass-pill rounded-full px-3.5 py-1.5 text-sm font-medium text-[var(--text-secondary)]"
-                  >
-                    {tag}
-                  </span>
-                ))}
-              </div>
-            ) : null}
-          </Reveal>
-          {actions ? <Reveal className="flex flex-wrap gap-3" delay={90}>{actions}</Reveal> : null}
+    <div className="sticky top-0 z-20 -mx-4 -mt-6 mb-6 flex h-16 items-center justify-between border-b border-white/8 bg-[#05070a]/95 px-4 backdrop-blur-md sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8 shadow-md">
+      {/* Lado izquierdo: Breadcrumb y Título */}
+      <div className="flex items-center gap-2.5 overflow-hidden">
+        <span className="text-[11px] font-bold text-slate-400 uppercase tracking-widest hidden sm:inline whitespace-nowrap">
+          {category}
+        </span>
+        <span className="text-slate-600 hidden sm:inline select-none">/</span>
+        <h1 className="font-display text-sm sm:text-base md:text-lg font-bold tracking-tight text-white truncate leading-none">
+          {title}
+        </h1>
+
+        {/* Tags */}
+        <div className="hidden xl:flex items-center gap-2 ml-3 border-l border-white/10 pl-3">
+          {tags.map((tag) => (
+            <span
+              key={tag}
+              className="rounded bg-white/[0.04] border border-white/8 px-2.5 py-1 text-[10px] font-semibold text-slate-300 whitespace-nowrap uppercase tracking-wider"
+            >
+              {tag}
+            </span>
+          ))}
         </div>
       </div>
-    </section>
+
+      {/* Lado derecho: Acciones */}
+      {actions ? (
+        <div className="flex items-center gap-2 shrink-0">
+          {actions}
+        </div>
+      ) : null}
+    </div>
   );
 }

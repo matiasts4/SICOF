@@ -2,8 +2,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import Link from "next/link";
-import { Activity, AlertTriangle, BarChart3, FileDown } from "lucide-react";
+import { Activity, AlertTriangle, BarChart3, FileDown, RefreshCw } from "lucide-react";
 
 import { PageIntro } from "@/components/page-intro";
 import { WorkspaceModuleGrid } from "@/components/workspace-module-grid";
@@ -30,32 +29,32 @@ export default function CofPage() {
   const [loading, setLoading] = useState(true);
   const [isRealData, setIsRealData] = useState(false);
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setLoading(true);
-        const [resKpis, resHealth, resIncidents] = await Promise.all([
-          fetch("/api/reports?action=get_kpis").then(r => r.json()),
-          fetch("/api/reports?action=get_terminal_health").then(r => r.json()),
-          fetch("/api/incidents?action=get_incidents").then(r => r.json())
-        ]);
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      const [resKpis, resHealth, resIncidents] = await Promise.all([
+        fetch("/api/reports?action=get_kpis").then(r => r.json()),
+        fetch("/api/reports?action=get_terminal_health").then(r => r.json()),
+        fetch("/api/incidents?action=get_incidents").then(r => r.json())
+      ]);
 
-        if (resKpis.status === "ok" && resHealth.status === "ok" && resIncidents.status === "ok") {
-          setKpis(resKpis.data || []);
-          setTerminalHealthData(resHealth.data || []);
-          setIncidents(resIncidents.data || []);
-          setIsRealData(true);
-        } else {
-          setIsRealData(false);
-        }
-      } catch (err) {
-        console.warn("Backend offline for COF page, using mock fallback:", err);
+      if (resKpis.status === "ok" && resHealth.status === "ok" && resIncidents.status === "ok") {
+        setKpis(resKpis.data || []);
+        setTerminalHealthData(resHealth.data || []);
+        setIncidents(resIncidents.data || []);
+        setIsRealData(true);
+      } else {
         setIsRealData(false);
-      } finally {
-        setLoading(false);
       }
-    };
+    } catch (err) {
+      console.warn("Backend offline for COF page, using mock fallback:", err);
+      setIsRealData(false);
+    } finally {
+      setLoading(false);
+    }
+  };
 
+  useEffect(() => {
     fetchData();
   }, []);
 
@@ -64,7 +63,7 @@ export default function CofPage() {
   let displayEscalations = mockEscalations;
   let displayReportQueue = mockReportQueue;
 
-  if (isRealData && !loading) {
+  if (isRealData) {
     // KPIs
     displayCofMetrics = kpis.map((k) => ({
       label: k.label,
@@ -101,23 +100,19 @@ export default function CofPage() {
       <PageIntro
         badge={`COF Hub · ${isRealData ? "Datos Reales (TCP)" : "Modo Demostración (Mock)"}`}
         title="Cockpit global para decidir rápido entre terminales, brechas y contingencias"
-        description="Acá el diseño deja de ser micro-operativo y pasa a modo dirección. Menos detalle por bus, más salud sistémica, más comparación, más capacidad de exportar y escalar."
+        description="Consola de dirección de red para el monitoreo consolidado de terminales, brechas de frecuencia y contingencias críticas."
         tone="blue"
         tags={["US4 + US6", "Gestión multi-terminal", "Salud sistémica"]}
         actions={
           <>
-            <Link
-              href="/cof/frecuencia"
-              className="btn btn-secondary"
+            <button
+              onClick={fetchData}
+              disabled={loading}
+              className="btn btn-primary cursor-pointer gap-2"
             >
-              Abrir frecuencia
-            </Link>
-            <Link
-              href="/cof/reportes"
-              className="btn btn-primary"
-            >
-              Abrir reportes
-            </Link>
+              <RefreshCw className="h-4 w-4" />
+              Sincronizar COF
+            </button>
           </>
         }
       />
@@ -157,7 +152,7 @@ export default function CofPage() {
           <Panel
             eyebrow="Salud Operacional"
             title="Salud operacional por terminal"
-            description="Comparación rápida de cumplimiento, disponibilidad e incidentes. Si esta vista no se entiende en segundos, no sirve para COF."
+            description="Comparación y métricas de desempeño de cumplimiento y disponibilidad de flota por terminal."
           >
             {loading ? (
               <div className="py-12 text-center text-slate-400 font-mono text-sm">
@@ -200,7 +195,7 @@ export default function CofPage() {
           <Panel
             eyebrow="Escalamiento"
             title="Contingencias que requieren decisión"
-            description="COF no gestiona todo: prioriza lo que amenaza regularidad o servicio."
+            description="Incidentes y contingencias críticas escaladas para intervención y coordinación de nivel central."
           >
             {loading ? (
               <div className="py-12 text-center text-slate-400 font-mono text-sm">
@@ -228,7 +223,7 @@ export default function CofPage() {
           <Panel
             eyebrow="Reporting Ejecutivo"
             title="Centro de exportación para cortes ejecutivos y auditoría"
-            description="La clave es que el reporte no aparezca como un botón perdido. Tiene que vivir en un workspace propio, con formato, horario y estado."
+            description="Cola de generación y estado de reportes consolidados del sistema para auditoría y análisis ejecutivo."
           >
             <div className="grid gap-3 lg:grid-cols-2">
               {displayReportQueue.map((report, idx) => (
@@ -249,8 +244,8 @@ export default function CofPage() {
 
       <WorkspaceModuleGrid
         eyebrow="Rutas COF"
-        title="El centro COF se reparte entre terminales, frecuencia, incidentes, KPIs y reportes"
-        description="El hub global sirve para entrar rápido al ángulo correcto según la presión del turno o el tipo de decisión que necesita la operación."
+        title="Módulos de Control Operativo"
+        description="Accesos directos a los submódulos de supervisión y gestión de la red de transporte."
         items={cofWorkspace.links.slice(1)}
       />
     </main>

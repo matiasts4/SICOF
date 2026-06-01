@@ -1,16 +1,45 @@
 import { NextRequest, NextResponse } from "next/server";
-import { sendToService } from "@/lib/soa-client";
+import { sendToService, authenticateRequest } from "@/lib/soa-client";
 
 export async function GET(request: NextRequest) {
   try {
+    const user = await authenticateRequest(request);
+    if (!user) {
+      return NextResponse.json(
+        { status: "error", message: "No autorizado. Token inválido o ausente." },
+        { status: 401 }
+      );
+    }
+
     const { searchParams } = new URL(request.url);
     const action = searchParams.get("action") ?? "get_intervals";
-    const terminal_id = searchParams.get("terminal_id");
-    const route_id = searchParams.get("route_id");
+    const terminal_id_str = searchParams.get("terminal_id");
+    const route_id_str = searchParams.get("route_id");
+
+    const terminal_id = terminal_id_str ? parseInt(terminal_id_str, 10) : null;
+    const route_id = route_id_str ? parseInt(route_id_str, 10) : null;
+
+    // Control de acceso por terminal (RF-003):
+    if (
+      user.rol !== "Admin COF" &&
+      user.rol !== "Admin TI" &&
+      user.terminal_id !== null &&
+      terminal_id !== null &&
+      user.terminal_id !== terminal_id
+    ) {
+      return NextResponse.json(
+        { status: "error", message: "Acceso denegado a este terminal." },
+        { status: 403 }
+      );
+    }
 
     const params: Record<string, unknown> = {};
-    if (terminal_id) params.terminal_id = parseInt(terminal_id, 10);
-    if (route_id) params.route_id = parseInt(route_id, 10);
+    if (user.rol !== "Admin COF" && user.rol !== "Admin TI" && user.terminal_id !== null) {
+      params.terminal_id = user.terminal_id;
+    } else if (terminal_id !== null) {
+      params.terminal_id = terminal_id;
+    }
+    if (route_id !== null) params.route_id = route_id;
 
     const result = await sendToService("frecu", { action, params });
     return NextResponse.json(result);
@@ -19,3 +48,4 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ status: "error", message: `Error SOA: ${message}` }, { status: 503 });
   }
 }
+

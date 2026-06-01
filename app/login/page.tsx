@@ -33,6 +33,7 @@ export default function LoginPage() {
       if (data.status === "ok" && data.token) {
         localStorage.setItem("sicof_token", data.token);
         localStorage.setItem("sicof_user", JSON.stringify(data.user));
+        document.cookie = `sicof_token=${data.token}; path=/; max-age=28800; SameSite=Lax`;
 
         // Redirigir según el rol
         const role = data.user.rol;

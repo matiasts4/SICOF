@@ -3,7 +3,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { BatteryCharging, BusFront, Gauge, Zap } from "lucide-react";
+import { BatteryCharging, BusFront, Gauge, Zap, RefreshCw, ClipboardCheck } from "lucide-react";
 
 import { PageIntro } from "@/components/page-intro";
 import { WorkspaceMetricGrid } from "@/components/workspace-metric-grid";
@@ -26,6 +26,32 @@ export default function TerminalEnergyPage() {
   const [chargers, setChargers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isRealData, setIsRealData] = useState(false);
+  const [actionMsg, setActionMsg] = useState<string | null>(null);
+
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      const [resSummary, resAlerts, resChargers] = await Promise.all([
+        fetch(`/api/soc?action=get_terminal_summary&terminal_id=${terminalId}`).then(r => r.json()),
+        fetch(`/api/soc?action=get_alerts&terminal_id=${terminalId}`).then(r => r.json()),
+        fetch(`/api/soc?action=get_charger_status&terminal_id=${terminalId}`).then(r => r.json())
+      ]);
+
+      if (resSummary.status === "ok" && resAlerts.status === "ok" && resChargers.status === "ok") {
+        setSummary(resSummary.data);
+        setAlerts(resAlerts.data || []);
+        setChargers(resChargers.data || []);
+        setIsRealData(true);
+      } else {
+        setIsRealData(false);
+      }
+    } catch (err) {
+      console.warn("Backend unavailable for energy page, using mock fallback:", err);
+      setIsRealData(false);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     const userStr = localStorage.getItem("sicof_user");
@@ -40,40 +66,20 @@ export default function TerminalEnergyPage() {
   }, []);
 
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setLoading(true);
-        const [resSummary, resAlerts, resChargers] = await Promise.all([
-          fetch(`/api/soc?action=get_terminal_summary&terminal_id=${terminalId}`).then(r => r.json()),
-          fetch(`/api/soc?action=get_alerts&terminal_id=${terminalId}`).then(r => r.json()),
-          fetch(`/api/soc?action=get_charger_status&terminal_id=${terminalId}`).then(r => r.json())
-        ]);
-
-        if (resSummary.status === "ok" && resAlerts.status === "ok" && resChargers.status === "ok") {
-          setSummary(resSummary.data);
-          setAlerts(resAlerts.data || []);
-          setChargers(resChargers.data || []);
-          setIsRealData(true);
-        } else {
-          setIsRealData(false);
-        }
-      } catch (err) {
-        console.warn("Backend unavailable for energy page, using mock fallback:", err);
-        setIsRealData(false);
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchData();
   }, [terminalId]);
+
+  const handleOptimizarCarga = () => {
+    setActionMsg("¡Distribución de carga inteligente optimizada! Se priorizaron unidades con salidas en los próximos 45 minutos.");
+    setTimeout(() => setActionMsg(null), 10000);
+  };
 
   let displayEnergyMetrics = mockEnergyMetrics;
   let displayChargingBoard = mockChargingBoard;
   let displayChargerBays = mockChargerBays;
   let displaySwapRecommendations = mockSwapRecommendations;
 
-  if (isRealData && !loading && summary) {
+  if (isRealData && summary) {
     // Métricas
     displayEnergyMetrics = [
       { label: "Unidades eléctricas", value: String(summary.total_electric), detail: `${summary.healthy} operativas sin alerta`, tone: "green" as Tone },
@@ -119,26 +125,45 @@ export default function TerminalEnergyPage() {
       <PageIntro
         badge={`Terminal · Energía · ${isRealData ? "Datos Reales (TCP)" : "Modo Demostración (Mock)"}`}
         title="La vista energética tiene que ayudar a decidir, no solo mostrar porcentajes lindos"
-        description="SoC, ocupación de cargadores y swaps sugeridos aparecen con lectura operacional directa para que energía y despacho se hablen en el mismo idioma visual." 
         tone="green"
         tags={["SoC", "Swap táctico"]}
         actions={
           <>
-            <Link
-              href="/terminal/flota"
-              className="btn btn-secondary"
+            <button
+              onClick={handleOptimizarCarga}
+              className="btn btn-primary cursor-pointer gap-2"
             >
-              Volver a flota
-            </Link>
-            <Link
-              href="/terminal/despacho"
-              className="btn btn-primary"
+              <Zap className="h-4 w-4" />
+              Optimizar Carga
+            </button>
+            <button
+              onClick={fetchData}
+              className="btn btn-secondary cursor-pointer"
             >
-              Ajustar despacho
-            </Link>
+              <RefreshCw className="h-4 w-4" />
+            </button>
           </>
         }
       />
+
+      {actionMsg && (
+        <section className="section-shell pt-0 pb-4">
+          <div className="page-shell">
+            <div className="flex items-center justify-between gap-3 rounded-2xl border border-green-500/20 bg-green-500/10 p-4 text-sm text-green-200">
+              <div className="flex items-center gap-3">
+                <ClipboardCheck className="h-5 w-5 shrink-0 text-green-400" />
+                <span>{actionMsg}</span>
+              </div>
+              <button
+                onClick={() => setActionMsg(null)}
+                className="text-green-400 hover:text-green-200 text-xs font-bold uppercase tracking-wider pl-4 cursor-pointer select-none"
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </section>
+      )}
 
       <WorkspaceMetricGrid items={displayEnergyMetrics} icons={icons} />
 
@@ -147,7 +172,7 @@ export default function TerminalEnergyPage() {
           <Panel
             eyebrow="SoC por unidad"
             title="Buses eléctricos que condicionan la salida"
-            description="Cada unidad muestra su cargador, ETA y riesgo operacional. El foco no es energía abstracta: es impacto sobre el turno."
+            description="Monitoreo de estado de carga (SoC), bahía de conexión y estimación de tiempo de disponibilidad de unidades."
           >
             {loading ? (
               <div className="py-12 text-center text-slate-400 font-mono text-sm">
@@ -186,7 +211,7 @@ export default function TerminalEnergyPage() {
           <Panel
             eyebrow="Bahías de carga"
             title="Capacidad disponible ahora mismo"
-            description="Esta lectura deja clarísimo qué punto conviene usar y dónde se está formando un cuello de botella."
+            description="Estado operacional de cargadores y porcentaje de ocupación del patio de carga rápida."
           >
             <div className="space-y-3">
               {displayChargerBays.map((bay, idx) => (
@@ -208,7 +233,7 @@ export default function TerminalEnergyPage() {
           <Panel
             eyebrow="Swap recomendado"
             title="Movimientos sugeridos para no romper frecuencia por energía"
-            description="No alcanza con detectar riesgo. La pantalla tiene que proponer la mejor jugada visible para el turno."
+            description="Recomendaciones operacionales para el reemplazo preventivo de unidades con baja autonomía de batería."
           >
             <div className="grid gap-3 lg:grid-cols-3">
               {displaySwapRecommendations.map((item, idx) => (

@@ -2,8 +2,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import Link from "next/link";
-import { AlertTriangle, ClipboardCheck, ShieldAlert, Waypoints } from "lucide-react";
+import { AlertTriangle, ClipboardCheck, ShieldAlert, Waypoints, RefreshCw } from "lucide-react";
 
 import { PageIntro } from "@/components/page-intro";
 import { WorkspaceMetricGrid } from "@/components/workspace-metric-grid";
@@ -25,30 +24,30 @@ export default function CofIncidentsPage() {
   const [loading, setLoading] = useState(true);
   const [isRealData, setIsRealData] = useState(false);
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setLoading(true);
-        const [resIncidents, resSummary] = await Promise.all([
-          fetch("/api/incidents?action=get_incidents").then(r => r.json()),
-          fetch("/api/incidents?action=get_severity_summary").then(r => r.json())
-        ]);
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      const [resIncidents, resSummary] = await Promise.all([
+        fetch("/api/incidents?action=get_incidents").then(r => r.json()),
+        fetch("/api/incidents?action=get_severity_summary").then(r => r.json())
+      ]);
 
-        if (resIncidents.status === "ok" && resSummary.status === "ok") {
-          setIncidents(resIncidents.data || []);
-          setSeveritySummary(resSummary.data);
-          setIsRealData(true);
-        } else {
-          setIsRealData(false);
-        }
-      } catch (err) {
-        console.warn("Backend offline for COF incidents, using mock fallback:", err);
+      if (resIncidents.status === "ok" && resSummary.status === "ok") {
+        setIncidents(resIncidents.data || []);
+        setSeveritySummary(resSummary.data);
+        setIsRealData(true);
+      } else {
         setIsRealData(false);
-      } finally {
-        setLoading(false);
       }
-    };
+    } catch (err) {
+      console.warn("Backend offline for COF incidents, using mock fallback:", err);
+      setIsRealData(false);
+    } finally {
+      setLoading(false);
+    }
+  };
 
+  useEffect(() => {
     fetchData();
   }, []);
 
@@ -57,7 +56,7 @@ export default function CofIncidentsPage() {
   let displaySeverityBuckets = mockSeverityBuckets;
   let displayResponseCells = mockResponseCells;
 
-  if (isRealData && !loading) {
+  if (isRealData) {
     const totalCount = incidents.length;
     const criticalCount = incidents.filter(i => i.severidad === "Crítica").length;
     const activeCount = incidents.filter(i => i.estado === "Abierto" || i.estado === "Escalado").length;
@@ -101,24 +100,20 @@ export default function CofIncidentsPage() {
     <main>
       <PageIntro
         badge={`COF · Incidentes · ${isRealData ? "Datos Reales (TCP)" : "Modo Demostración (Mock)"}`}
-        title="El tablero de incidentes de red separa severidad, ownership y estado de contención con muy poco ruido"
-        description="COF no necesita ver todos los campos de un formulario. Necesita distinguir qué caso compromete servicio, quién lo toma y si la respuesta está dentro de la ventana correcta."
+        title="Monitoreo Global de Contingencias e Incidentes"
+        description="Consola de visualización de incidentes activos en la red, niveles de severidad y estado de escalamiento de novedades."
         tone="red"
         tags={["Severidad", "Contención multi-terminal"]}
         actions={
           <>
-            <Link
-              href="/cof/frecuencia"
-              className="btn btn-secondary"
+            <button
+              onClick={fetchData}
+              disabled={loading}
+              className="btn btn-primary cursor-pointer gap-2"
             >
-              Volver a frecuencia
-            </Link>
-            <Link
-              href="/admin/auditoria"
-              className="btn btn-primary"
-            >
-              Ver auditoría TI
-            </Link>
+              <RefreshCw className="h-4 w-4" />
+              Sincronizar Incidentes
+            </button>
           </>
         }
       />
@@ -130,7 +125,7 @@ export default function CofIncidentsPage() {
           <Panel
             eyebrow="Casos de red"
             title="Incidentes que sí merecen espacio en COF"
-            description="La tabla deja afuera lo anecdótico y sube solo lo que afecta continuidad, frecuencia o lectura ejecutiva."
+            description="Listado de incidentes de alta prioridad que afectan la continuidad operacional del servicio."
           >
             {loading ? (
               <div className="py-12 text-center text-slate-400 font-mono text-sm">
@@ -170,7 +165,7 @@ export default function CofIncidentsPage() {
             <Panel
               eyebrow="Buckets"
               title="Severidad distribuida"
-              description="Esta caja hace visible el peso relativo de la contingencia, no solo la lista infinita de casos."
+              description="Clasificación de contingencias activas según su nivel de severidad y potencial impacto."
             >
               {loading ? (
                 <div className="py-12 text-center text-slate-400 font-mono text-sm">
@@ -194,7 +189,7 @@ export default function CofIncidentsPage() {
             <Panel
               eyebrow="Ownership"
               title="Qué célula responde según el tipo de problema"
-              description="La UI deja clara la división entre despacho, COF y TI para preparar bien el diseño de responsabilidades futuras."
+              description="Célula de respuesta responsable asignada según la categoría y área del incidente."
             >
               <div className="space-y-3">
                 {displayResponseCells.map((item, index) => (

@@ -147,3 +147,47 @@ INSERT INTO incidente (id_bus, id_conductor, tipo, severidad, descripcion, coord
     (2, 2, 'Energía',       'Alta',  'SoC insuficiente para vuelta completa en servicio 405c. Requiere swap o reasignación.',         -33.3580, -70.7340, 'Escalado', '2026-05-24T05:35:00'),
     (7, 4, 'Mantenimiento', 'Media', 'Sensor de puerta reporta intermitencia. No bloquea reserva pero requiere revisión.',            -33.3575, -70.7350, 'Abierto',  '2026-05-24T05:50:00'),
     (1, 1, 'Vial',          'Media', 'Congestión en acceso Alameda. Se mantiene ruta con desvío sugerido, tiempo de paso controlado.', -33.4420, -70.6530, 'Abierto',  '2026-05-24T06:05:00');
+
+-- ── Semillas de Parámetros Globales ──────────────────────────────────────────
+INSERT INTO parametro_global (clave, valor, tipo, descripcion) VALUES
+    ('umbral_soc_critico', '30', 'number', 'Porcentaje mínimo de batería antes de generar una alerta crítica (SoC)'),
+    ('intervalo_gps_segundos', '30', 'number', 'Frecuencia de envío de telemetría de los terminales y buses activos'),
+    ('modo_contingencia', 'false', 'boolean', 'Habilita la operación simplificada sin validación estricta de conductor/ruta');
+
+-- ── Semillas de Permisos RBAC ────────────────────────────────────────────────
+INSERT INTO permiso (codigo, nombre, descripcion) VALUES
+    ('ver_flota',            'Ver Flota',            'Visualizar buses e incidentes en tiempo real'),
+    ('editar_asignacion',    'Editar Asignación',    'Asignar buses y conductores a servicios activos'),
+    ('gestionar_usuarios',   'Gestionar Usuarios',   'Crear, editar o deshabilitar cuentas en el sistema'),
+    ('modificar_parametros', 'Modificar Parámetros', 'Modificar umbrales globales y configuración del sistema'),
+    ('ver_auditoria',        'Ver Auditoría',        'Consultar el log de acciones técnicas del Administrador');
+
+-- ── Semillas de Rol-Permiso ──────────────────────────────────────────────────
+INSERT INTO rol_permiso (rol, id_permiso) VALUES
+    -- Despachador
+    ('Despachador', 1), -- ver_flota
+    ('Despachador', 2), -- editar_asignacion
+    -- Admin COF
+    ('Admin COF', 1), -- ver_flota
+    ('Admin COF', 2), -- editar_asignacion
+    ('Admin COF', 4), -- modificar_parametros
+    -- Admin TI
+    ('Admin TI', 1), -- ver_flota
+    ('Admin TI', 2), -- editar_asignacion
+    ('Admin TI', 3), -- gestionar_usuarios
+    ('Admin TI', 4), -- modificar_parametros
+    ('Admin TI', 5); -- ver_auditoria
+
+-- ── Semillas de Auditoría Inicial ───────────────────────────────────────────
+INSERT INTO auditoria (username, accion, tabla_afectada, registro_id, detalles, fecha_hora) VALUES
+    ('admin', 'LOGIN', 'usuario', 6, 'Inicio de sesión exitoso desde terminal TI', '2026-06-01T10:15:30'),
+    ('admin', 'UPDATE', 'parametro_global', 1, 'Cambio de umbral_soc_critico de 25 a 30', '2026-06-01T10:18:12'),
+    ('cpizarro', 'CREATE', 'asignacion', 1, 'Creación de asignación para bus EB-214 y cond Carla Pizarro', '2026-06-01T11:02:44'),
+    ('admin', 'UPDATE', 'usuario', 4, 'Habilitación de rol Admin COF para Paula Vera', '2026-06-01T12:00:05');
+
+-- ── Semillas de Reportes/Descargas ───────────────────────────────────────────
+INSERT INTO reporte_descarga (nombre, tipo, fecha_creacion, url_archivo, creador) VALUES
+    ('Reporte_Consumo_Mayo_2026.pdf', 'Consumo Energético', '2026-05-31T23:59:00', '/downloads/reportes/Reporte_Consumo_Mayo_2026.pdf', 'pvera'),
+    ('Kpis_Frecuencia_Semana22.xlsx', 'Frecuencia y Regulación', '2026-06-01T08:00:00', '/downloads/reportes/Kpis_Frecuencia_Semana22.xlsx', 'pvera'),
+    ('Historico_Incidentes_ElRoble.pdf', 'Incidentes y Fallas', '2026-06-01T09:30:00', '/downloads/reportes/Historico_Incidentes_ElRoble.pdf', 'pvera');
+

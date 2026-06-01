@@ -121,3 +121,51 @@ export async function isBusAvailable(): Promise<boolean> {
     });
   });
 }
+
+export interface AuthenticatedUser {
+  id: number;
+  username: string;
+  nombre: string;
+  rol: string;
+  terminal_id: number | null;
+}
+
+export async function authenticateRequest(
+  request: Request,
+): Promise<AuthenticatedUser | null> {
+  let token: string | null = null;
+
+  // 1. Intentar leer de cabecera Authorization
+  const authHeader = request.headers.get("authorization");
+  if (authHeader && authHeader.startsWith("Bearer ")) {
+    token = authHeader.substring(7);
+  }
+
+  // 2. Si no está en Authorization, intentar leer de las Cookies
+  if (!token) {
+    const cookieHeader = request.headers.get("cookie");
+    if (cookieHeader) {
+      const match = cookieHeader.match(/sicof_token=([^;]+)/);
+      if (match) {
+        token = match[1];
+      }
+    }
+  }
+
+  if (!token) {
+    return null;
+  }
+
+  try {
+    const result = await sendToService("segur", {
+      action: "validate",
+      params: { token }
+    });
+    if (result.status === "ok" && result.user) {
+      return result.user as AuthenticatedUser;
+    }
+  } catch (error) {
+    console.error("Error en validación de token:", error);
+  }
+  return null;
+}

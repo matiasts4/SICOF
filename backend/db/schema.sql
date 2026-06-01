@@ -124,3 +124,48 @@ CREATE INDEX IF NOT EXISTS idx_registro_gps_ts    ON registro_gps(timestamp);
 CREATE INDEX IF NOT EXISTS idx_estado_carga_bus   ON estado_carga(id_bus);
 CREATE INDEX IF NOT EXISTS idx_estado_carga_ts    ON estado_carga(timestamp);
 CREATE INDEX IF NOT EXISTS idx_usuario_terminal   ON usuario(id_terminal);
+
+-- ── Auditoría ─────────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS auditoria (
+    id_auditoria   INTEGER PRIMARY KEY AUTOINCREMENT,
+    username      TEXT    NOT NULL,
+    accion        TEXT    NOT NULL,
+    tabla_afectada TEXT,
+    registro_id    INTEGER,
+    detalles      TEXT,
+    fecha_hora     TEXT    NOT NULL  -- ISO 8601 timestamp
+);
+
+-- ── Parametros Globales ───────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS parametro_global (
+    clave       TEXT PRIMARY KEY,
+    valor       TEXT    NOT NULL,
+    tipo        TEXT    NOT NULL CHECK (tipo IN ('number', 'string', 'boolean')),
+    descripcion TEXT
+);
+
+-- ── Permisos RBAC ────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS permiso (
+    id_permiso  INTEGER PRIMARY KEY AUTOINCREMENT,
+    codigo      TEXT    NOT NULL UNIQUE,
+    nombre      TEXT    NOT NULL,
+    descripcion TEXT
+);
+
+CREATE TABLE IF NOT EXISTS rol_permiso (
+    rol        TEXT    NOT NULL CHECK (rol IN ('Despachador', 'Admin COF', 'Admin TI')),
+    id_permiso INTEGER NOT NULL,
+    PRIMARY KEY (rol, id_permiso),
+    FOREIGN KEY (id_permiso) REFERENCES permiso(id_permiso)
+);
+
+-- ── Cola/Descargas de Reportes ───────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS reporte_descarga (
+    id_reporte     INTEGER PRIMARY KEY AUTOINCREMENT,
+    nombre         TEXT    NOT NULL,
+    tipo           TEXT    NOT NULL,
+    fecha_creacion TEXT    NOT NULL,  -- ISO 8601 timestamp
+    url_archivo    TEXT    NOT NULL,
+    creador        TEXT    NOT NULL
+);
+
