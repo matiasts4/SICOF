@@ -15,9 +15,46 @@ SICOF utiliza una **base de datos relacional centralizada compartida entre todos
 - **Simplificación operativa**: Con 7 servicios y un equipo de 4 personas, mantener 7 bases separadas con replicación eventual agregaría complejidad sin beneficio proporcional en esta escala.
 - **Aislamiento lógico por terminal**: El control de acceso por terminal (RF-003) se implementa a nivel de consultas SQL con filtros `WHERE id_terminal = ?`, garantizando que cada despachador solo vea y opere sobre los recursos de su patio.
 
-**Motor seleccionado**: SQLite para desarrollo local; PostgreSQL para producción (compatible sin cambios en el esquema).
+**Motor seleccionado**: arquitectura **dual** — SQLite para desarrollo local sin dependencias; PostgreSQL + TimescaleDB para staging y producción.
+
+#### Lógica de selección de motor
+
+La decisión ocurre en `backend/db/connection.py` mediante una única condición evaluada al iniciar la aplicación:
+
+```python
+USE_POSTGRES = HAS_POSTGRES and os.environ.get("SICOF_USE_POSTGRES") == "true"
+```
+
+Ambas condiciones deben cumplirse:
+
+| Condición | Descripción |
+|---|---|
+| `HAS_POSTGRES` | El paquete `psycopg` (psycopg3) está instalado en el entorno Python |
+| `SICOF_USE_POSTGRES=true` | La variable de entorno está activa (via `.env` o shell) |
+
+#### Cuándo activa cada motor
+
+| Situación | Motor activo | Motivo |
+|---|---|---|
+| `npm run dev` con `.env` configurado | **PostgreSQL + TimescaleDB** | `start_services.py` carga el `.env` automáticamente al arrancar, el cual contiene `SICOF_USE_POSTGRES=true` |
+| `npm run dev` sin `.env` o sin Docker | **SQLite** | `USE_POSTGRES` evalúa `False`; el sistema usa `backend/db/sicof.db` local |
+| Desarrollador sin Docker instalado | **SQLite** | Fallback transparente sin cambios de código |
+| CI/CD o servidor sin variables de entorno PG | **SQLite** | Mismo fallback automático |
+
+#### Flujo de arranque con PostgreSQL
+
+```
+npm run dev
+  └─► start_services.py
+        └─► _load_dotenv()       ← lee .env del proyecto
+              └─► SICOF_USE_POSTGRES=true
+                    └─► connection.py → USE_POSTGRES = True
+                          └─► Conecta a TimescaleDB en localhost:5433
+                                └─► schema_pg.sql + seed_pg.sql (solo si BD vacía)
+```
 
 **Complementos de persistencia**:
+
 
 - **Datos de alta frecuencia** (GPS y SoC): Se almacenan en tablas con índices optimizados por `id_bus` y `timestamp`. En producción se recomienda TimescaleDB (extensión de PostgreSQL) para particionado automático por tiempo.
 - **Evidencia multimedia**: Las fotografías adjuntas a incidentes se almacenan en sistema de archivos, con referencia en columna `url_evidencia` de la tabla `incidente`.
@@ -513,10 +550,27 @@ El código fuente que implementa esta arquitectura se encuentra en:
 - **BUS ESB**: `backend/soa_bus.py` — Router de mensajes TCP en puerto 5000
 - **Librería SOA**: `backend/soa_lib.py` — Funciones `connect_to_bus()`, `send_message()`, `receive_message()`
 - **Servicios**: `backend/services/` — 7 servicios Python independientes
-- **Base de datos**: `backend/db/schema.sql` + `backend/db/seed.sql` — Esquema y datos iniciales
+- **Base de datos (SQLite / dev)**: `backend/db/schema.sql` + `backend/db/seed.sql` — Esquema y datos iniciales para desarrollo local
+- **Base de datos (PostgreSQL / prod)**: `backend/db/schema_pg.sql` + `backend/db/seed_pg.sql` — Esquema nativo para PostgreSQL + TimescaleDB (hypertables para `registro_gps` y `estado_carga`)
+- **Capa de acceso a datos**: `backend/db/connection.py` — Fachada que abstrae SQLite/PostgreSQL; implementa `query()`, `execute()` y `execute_many()` con traducción automática de placeholders (`?` → `%s`)
 - **Tests**: `backend/test_soa.py` — Validación de los 7 servicios vía BUS TCP
+- **Infraestructura**: `docker-compose.yml` — Contenedor TimescaleDB en puerto 5433 (evita conflicto con instalaciones nativas de PostgreSQL en el puerto 5432)
+- **Configuración**: `.env.example` / `.env` — Variables de entorno; `requirements.txt` — dependencias Python
 
-El sistema se levanta con un único comando:
+El sistema se levanta con un único comando en ambos modos:
+
+**Modo desarrollo (SQLite, sin Docker):**
+```bash
+npm run dev
 ```
-python backend/start_services.py
+
+**Modo producción/staging (PostgreSQL + TimescaleDB):**
+```bash
+# 1. Levantar la base de datos
+docker-compose up -d
+
+# 2. Arrancar la aplicación completa (carga .env automáticamente)
+npm run dev
 ```
+
+La aplicación detecta el motor disponible en cada arranque y opera de forma transparente sin cambios de código.

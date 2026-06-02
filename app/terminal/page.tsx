@@ -282,8 +282,8 @@ export default function TerminalPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {displayLiveFleet.map((bus) => (
-                    <tr key={bus.padron} className="bg-white/4">
+                  {displayLiveFleet.map((bus, idx) => (
+                    <tr key={`${bus.padron}-${idx}`} className="bg-white/4">
                       <td className="rounded-l-2xl border-y border-l border-white/8 px-4 py-3 font-medium text-slate-100">
                         {bus.padron} · {bus.route}
                       </td>
@@ -352,8 +352,8 @@ export default function TerminalPage() {
               description="Registro y seguimiento inmediato de novedades en el terminal."
             >
               <div className="space-y-3">
-                {displayIncidents.map((incident) => (
-                  <div key={`${incident.type}-${incident.bus}`} className="rounded-2xl border border-white/8 bg-white/4 p-4">
+                {displayIncidents.map((incident, idx) => (
+                  <div key={`${incident.type}-${incident.bus}-${idx}`} className="rounded-2xl border border-white/8 bg-white/4 p-4">
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <div>
                         <p className="font-medium text-slate-100">{incident.type} · {incident.bus}</p>

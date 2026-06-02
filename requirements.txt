@@ -1,0 +1,8 @@
+# =============================================================================
+# SICOF — Dependencias Python
+# Instalar con: pip install -r requirements.txt
+# =============================================================================
+
+# Driver PostgreSQL — psycopg3 (reemplazo oficial de psycopg2, compatible con Python 3.14+)
+# psycopg[binary] incluye las librerías nativas compiladas sin dependencias externas
+psycopg[binary]>=3.1

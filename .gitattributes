@@ -1,0 +1,25 @@
+# Normalización de saltos de línea para el repositorio SICOF
+# Garantiza consistencia entre Windows (CRLF) y Linux/macOS (LF)
+
+# Texto: normalizar a LF en el repo, auto-convertir al hacer checkout
+* text=auto
+
+# Scripts Python y SQL: siempre LF (compatibilidad Linux/Docker)
+*.py    text eol=lf
+*.sql   text eol=lf
+*.sh    text eol=lf
+
+# Archivos de configuración
+*.yml   text eol=lf
+*.yaml  text eol=lf
+*.json  text eol=lf
+*.env   text eol=lf
+*.md    text eol=lf
+*.txt   text eol=lf
+
+# Binarios: sin conversión
+*.png   binary
+*.jpg   binary
+*.ico   binary
+*.woff  binary
+*.woff2 binary

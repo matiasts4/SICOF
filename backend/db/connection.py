@@ -1,18 +1,24 @@
 """
 connection.py — Helper de conexión a base de datos para SICOF.
 
-Soporta PostgreSQL/TimescaleDB si el driver está disponible y se solicita,
-con fallback transparente a SQLite para desarrollo local ágil y sin dependencias.
+Soporta PostgreSQL/TimescaleDB si el driver está disponible y la variable de
+entorno SICOF_USE_POSTGRES=true está activa, con fallback transparente a SQLite
+para desarrollo local ágil y sin dependencias externas.
+
+En modo PostgreSQL se usan schema_pg.sql y seed_pg.sql (nativos para PG/TimescaleDB).
+En modo SQLite se usan schema.sql y seed.sql (originales, sin cambios).
 """
 
+import datetime
+import decimal
 import os
 import sqlite3
 
-# Intentar cargar driver PostgreSQL de manera opcional
+# Intentar cargar driver PostgreSQL de manera opcional (psycopg3)
 HAS_POSTGRES = False
 try:
-    import psycopg2
-    import psycopg2.extras
+    import psycopg
+    from psycopg.rows import dict_row as _pg_dict_row
     HAS_POSTGRES = True
 except ImportError:
     pass
@@ -22,8 +28,14 @@ USE_POSTGRES = HAS_POSTGRES and os.environ.get("SICOF_USE_POSTGRES") == "true"
 
 DB_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(DB_DIR, "sicof.db")
+
+# Archivos SQLite (desarrollo local)
 SCHEMA_PATH = os.path.join(DB_DIR, "schema.sql")
-SEED_PATH = os.path.join(DB_DIR, "seed.sql")
+SEED_PATH   = os.path.join(DB_DIR, "seed.sql")
+
+# Archivos PostgreSQL/TimescaleDB (producción)
+SCHEMA_PG_PATH = os.path.join(DB_DIR, "schema_pg.sql")
+SEED_PG_PATH   = os.path.join(DB_DIR, "seed_pg.sql")
 
 
 def get_sqlite_connection() -> sqlite3.Connection:
@@ -35,50 +47,70 @@ def get_sqlite_connection() -> sqlite3.Connection:
 
 
 def get_postgres_connection():
-    """Obtiene una conexión a la base de datos PostgreSQL."""
+    """Obtiene una conexión a la base de datos PostgreSQL (psycopg3)."""
     if not HAS_POSTGRES:
-        raise ImportError("psycopg2 no está instalado en este entorno.")
-    
-    host = os.environ.get("POSTGRES_HOST", "localhost")
-    port = os.environ.get("POSTGRES_PORT", "5432")
-    db = os.environ.get("POSTGRES_DB", "sicof")
-    user = os.environ.get("POSTGRES_USER", "postgres")
+        raise ImportError(
+            "psycopg no está instalado. Ejecuta: pip install 'psycopg[binary]>=3.1'"
+        )
+
+    host     = os.environ.get("POSTGRES_HOST",     "localhost")
+    port     = os.environ.get("POSTGRES_PORT",     "5432")
+    db       = os.environ.get("POSTGRES_DB",       "sicof")
+    user     = os.environ.get("POSTGRES_USER",     "postgres")
     password = os.environ.get("POSTGRES_PASSWORD", "postgres")
-    
-    return psycopg2.connect(
+
+    return psycopg.connect(
         host=host,
-        port=port,
-        database=db,
+        port=int(port),
+        dbname=db,
         user=user,
-        password=password
+        password=password,
+        connect_timeout=5,   # Falla rápido si PostgreSQL no está disponible
     )
 
 
 def init_db(force: bool = False) -> None:
     """
     Inicializa la base de datos: crea tablas y carga datos iniciales.
-    Soporta tanto SQLite como PostgreSQL según la configuración.
+    Soporta tanto SQLite como PostgreSQL/TimescaleDB según la configuración.
+
+    En modo PostgreSQL:
+      - El schema (DDL) se ejecuta con autocommit=True (necesario para CREATE EXTENSION,
+        CREATE TABLE y create_hypertable de TimescaleDB).
+      - El seed se ejecuta en una transacción con ON CONFLICT DO NOTHING, por lo que
+        es completamente idempotente: re-ejecutar no duplica datos.
+      - `force` recrea el schema igualmente; el seed es siempre idempotente.
     """
     if USE_POSTGRES:
-        print("[DB] Inicializando base de datos PostgreSQL...")
+        print("[DB] Inicializando base de datos PostgreSQL/TimescaleDB...")
         conn = get_postgres_connection()
-        cursor = conn.cursor()
-        
-        # Ejecutar schema
-        with open(SCHEMA_PATH, "r", encoding="utf-8") as f:
-            cursor.execute(f.read())
-        print("[DB] Schema aplicado en PostgreSQL")
 
-        # Ejecutar seed
-        with open(SEED_PATH, "r", encoding="utf-8") as f:
+        # ── DDL: usar autocommit para CREATE EXTENSION / CREATE TABLE / create_hypertable
+        conn.autocommit = True
+        cursor = conn.cursor()
+        with open(SCHEMA_PG_PATH, "r", encoding="utf-8") as f:
             cursor.execute(f.read())
-        print("[DB] Datos iniciales cargados en PostgreSQL")
-        
-        conn.commit()
+        print("[DB] Schema PostgreSQL/TimescaleDB aplicado")
+
+        # ── Seed: solo cargar si la BD está vacía o force=True
+        # Las tablas sin UNIQUE (registro_gps, asignacion, incidente, etc.)
+        # se duplicarían si el seed se ejecutara en cada reinicio.
+        cursor.execute("SELECT COUNT(*) FROM terminal")
+        already_seeded = cursor.fetchone()[0] > 0
+
+        if not already_seeded or force:
+            conn.autocommit = False
+            with open(SEED_PG_PATH, "r", encoding="utf-8") as f:
+                cursor.execute(f.read())
+            conn.commit()
+            print("[DB] Datos iniciales cargados en PostgreSQL")
+        else:
+            print("[DB] Datos iniciales ya presentes, seed omitido")
+
         conn.close()
         print("[DB] Base de datos PostgreSQL lista.")
     else:
-        # Lógica original para SQLite
+        # ── Lógica original para SQLite (sin cambios)
         if force and os.path.exists(DB_PATH):
             os.remove(DB_PATH)
             print(f"[DB] Base de datos SQLite eliminada: {DB_PATH}")
@@ -103,15 +135,35 @@ def init_db(force: bool = False) -> None:
         print(f"[DB] Base de datos SQLite lista en: {DB_PATH}")
 
 
+def _json_safe(row: dict) -> dict:
+    """
+    Convierte tipos no-JSON-serializables que devuelve psycopg2 a tipos Python básicos.
+    - datetime/date/time  → string ISO 8601
+    - Decimal             → float
+    Esto permite que los servicios hagan json.dumps() sin necesidad de un encoder custom.
+    """
+    result = {}
+    for k, v in row.items():
+        if isinstance(v, (datetime.datetime, datetime.date, datetime.time)):
+            result[k] = v.isoformat()
+        elif isinstance(v, decimal.Decimal):
+            result[k] = float(v)
+        else:
+            result[k] = v
+    return result
+
+
 def query(sql: str, params: tuple = ()) -> list[dict]:
     """Ejecuta un SELECT y retorna lista de diccionarios."""
     if USE_POSTGRES:
         conn = get_postgres_connection()
-        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        # dict_row hace que cada fila sea un dict directamente
+        cursor = conn.cursor(row_factory=_pg_dict_row)
         # Adaptar placeholder de SQLite (?) a Postgres (%s)
-        cursor.execute(sql.replace("?", "%s"), params)
+        cursor.execute(sql.replace("?", "%s"), params or None)
         rows = cursor.fetchall()
-        result = [dict(row) for row in rows]
+        # _json_safe convierte datetime → str para que json.dumps() no falle
+        result = [_json_safe(dict(row)) for row in rows]
         conn.close()
         return result
     else:
@@ -129,24 +181,18 @@ def execute(sql: str, params: tuple = ()) -> int:
     if USE_POSTGRES:
         conn = get_postgres_connection()
         cursor = conn.cursor()
-        # Adaptar placeholder
         postgres_sql = sql.replace("?", "%s")
-        
-        # En PostgreSQL, sqlite3's lastrowid no existe nativamente, 
-        # pero podemos intentar capturarlo o simularlo si es un INSERT con RETURNING.
-        # Para mantener compatibilidad simple:
-        cursor.execute(postgres_sql, params)
-        
-        # Si es un INSERT, intentar conseguir el ID insertado
+        cursor.execute(postgres_sql, params or None)
+
+        # Intentar obtener el ID del último INSERT (si la tabla tiene secuencia)
         last_id = 0
         if sql.strip().upper().startswith("INSERT"):
             try:
-                # Opcional: si la tabla tiene ID autoincremental
                 cursor.execute("SELECT LASTVAL()")
                 last_id = cursor.fetchone()[0]
             except Exception:
                 pass
-                
+
         conn.commit()
         conn.close()
         return last_id
