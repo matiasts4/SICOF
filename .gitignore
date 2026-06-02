@@ -36,3 +36,11 @@ __pycache__/
 **/__pycache__/
 *.pyc
 
+# Variables de entorno con credenciales reales
+.env
+
+# Base de datos SQLite local (se genera automáticamente al arrancar)
+backend/db/sicof.db
+
+# Scripts temporales de diagnóstico
+verify_db.py

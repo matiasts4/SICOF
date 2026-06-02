@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "concurrently -n \"SOA,UI\" -c \"yellow,blue\" \"python3 backend/start_services.py\" \"next dev\"",
+    "dev": "concurrently -n \"SOA,UI\" -c \"yellow,blue\" \"python backend/start_services.py\" \"next dev\"",
     "build": "next build",
     "lint": "eslint ."
   },
