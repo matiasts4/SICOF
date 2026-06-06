@@ -28,6 +28,13 @@ export default function TerminalEnergyPage() {
   const [isRealData, setIsRealData] = useState(false);
   const [actionMsg, setActionMsg] = useState<string | null>(null);
 
+  // Estados para carga manual
+  const [isChargeModalOpen, setIsChargeModalOpen] = useState(false);
+  const [electricBuses, setElectricBuses] = useState<any[]>([]);
+  const [selectedChargeBusId, setSelectedChargeBusId] = useState("");
+  const [chargeLevel, setChargeLevel] = useState(100);
+
+
   const fetchData = async () => {
     try {
       setLoading(true);
@@ -73,6 +80,65 @@ export default function TerminalEnergyPage() {
     setActionMsg("¡Distribución de carga inteligente optimizada! Se priorizaron unidades con salidas en los próximos 45 minutos.");
     setTimeout(() => setActionMsg(null), 10000);
   };
+
+  const handleOpenChargeModal = async () => {
+    setIsChargeModalOpen(true);
+    setSelectedChargeBusId("");
+    setChargeLevel(100);
+    try {
+      const res = await fetch(`/api/fleet?action=get_buses&terminal_id=${terminalId}`).then(r => r.json());
+      if (res.status === "ok") {
+        const elect = (res.data || []).filter((b: any) => b.tipo_energia === "Eléctrico");
+        setElectricBuses(elect);
+      }
+    } catch (err) {
+      console.warn("No se pudieron cargar los buses para cargar:", err);
+      setElectricBuses([
+        { id_bus: 1, patente: "EB-214" },
+        { id_bus: 2, patente: "EB-301" },
+        { id_bus: 4, patente: "EB-118" },
+      ]);
+    }
+  };
+
+  const handleRegisterCharge = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedChargeBusId || !chargeLevel) {
+      alert("Por favor completa todos los campos.");
+      return;
+    }
+
+    try {
+      const res = await fetch("/api/soc", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "register_charge",
+          params: {
+            id_bus: parseInt(selectedChargeBusId, 10),
+            nivel_carga: parseFloat(String(chargeLevel)),
+            autonomia_km: parseFloat(String(chargeLevel)) * 2, // 2km por 1% SoC
+            timestamp: new Date().toISOString()
+          }
+        })
+      }).then(r => r.json());
+
+      if (res.status === "ok") {
+        setActionMsg("¡Carga registrada exitosamente en base de datos!");
+        setIsChargeModalOpen(false);
+        fetchData();
+        setTimeout(() => setActionMsg(null), 10000);
+      } else {
+        alert("Error al registrar carga: " + res.message);
+      }
+    } catch (err) {
+      console.warn("Error enviando carga, simulando flujo:", err);
+      setActionMsg("¡Carga simulada exitosamente (Modo Demostración)!");
+      setIsChargeModalOpen(false);
+      setTimeout(() => setActionMsg(null), 10000);
+    }
+  };
+
 
   let displayEnergyMetrics = mockEnergyMetrics;
   let displayChargingBoard = mockChargingBoard;
@@ -130,8 +196,15 @@ export default function TerminalEnergyPage() {
         actions={
           <>
             <button
-              onClick={handleOptimizarCarga}
+              onClick={handleOpenChargeModal}
               className="btn btn-primary cursor-pointer gap-2"
+            >
+              <BatteryCharging className="h-4 w-4" />
+              Mandar a Cargar
+            </button>
+            <button
+              onClick={handleOptimizarCarga}
+              className="btn btn-secondary cursor-pointer gap-2"
             >
               <Zap className="h-4 w-4" />
               Optimizar Carga
@@ -144,6 +217,7 @@ export default function TerminalEnergyPage() {
             </button>
           </>
         }
+
       />
 
       {actionMsg && (
@@ -250,6 +324,64 @@ export default function TerminalEnergyPage() {
           </Panel>
         </div>
       </section>
+
+      {isChargeModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md rounded-2xl border border-white/10 bg-slate-900/90 p-6 text-slate-100 shadow-2xl backdrop-blur-md">
+            <h3 className="text-xl font-bold text-slate-100">Registrar Carga de Bus</h3>
+            <p className="mt-1 text-xs text-slate-400">Envía un bus eléctrico a un cargador rápido y actualiza su estado.</p>
+            
+            <form onSubmit={handleRegisterCharge} className="mt-4 space-y-4">
+              <div>
+                <label className="block text-xs uppercase tracking-wider text-slate-400 font-semibold mb-1">Bus Eléctrico</label>
+                <select
+                  value={selectedChargeBusId}
+                  onChange={(e) => setSelectedChargeBusId(e.target.value)}
+                  className="w-full rounded-xl border border-white/10 bg-slate-800/80 px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-blue-500"
+                  required
+                >
+                  <option value="">Seleccione un bus...</option>
+                  {electricBuses.map((b) => (
+                    <option key={b.id_bus} value={b.id_bus}>{b.patente} {b.modelo ? `(${b.modelo})` : ""}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs uppercase tracking-wider text-slate-400 font-semibold mb-1">Porcentaje de Carga (SoC)</label>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="range"
+                    min="1"
+                    max="100"
+                    value={chargeLevel}
+                    onChange={(e) => setChargeLevel(parseInt(e.target.value, 10))}
+                    className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-green-500"
+                  />
+                  <span className="w-12 text-right font-mono font-bold text-green-400">{chargeLevel}%</span>
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-3 mt-6">
+                <button
+                  type="button"
+                  onClick={() => setIsChargeModalOpen(false)}
+                  className="px-4 py-2 rounded-xl text-sm font-semibold text-slate-300 bg-white/5 hover:bg-white/10 transition cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 rounded-xl text-sm font-semibold text-white bg-green-600 hover:bg-green-500 transition cursor-pointer"
+                >
+                  Confirmar Carga
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
+

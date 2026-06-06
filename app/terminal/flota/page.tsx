@@ -29,6 +29,15 @@ export default function TerminalFleetPage() {
   const [isRealData, setIsRealData] = useState(false);
   const [actionMsg, setActionMsg] = useState<string | null>(null);
 
+  // Estados para asignación manual
+  const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
+  const [conductorsList, setConductorsList] = useState<any[]>([]);
+  const [routesList, setRoutesList] = useState<any[]>([]);
+  const [selectedBusId, setSelectedBusId] = useState("");
+  const [selectedConductorId, setSelectedConductorId] = useState("");
+  const [selectedRouteId, setSelectedRouteId] = useState("");
+
+
   const fetchData = async () => {
     try {
       setLoading(true);
@@ -80,6 +89,71 @@ export default function TerminalFleetPage() {
     setActionMsg("¡Orden de Mantenimiento enviada! Unidad EB-102 ingresada a taller. Estado actualizado en base de datos.");
     setTimeout(() => setActionMsg(null), 10000);
   };
+
+  const handleOpenAssignModal = async () => {
+    setIsAssignModalOpen(true);
+    setSelectedBusId("");
+    setSelectedConductorId("");
+    setSelectedRouteId("");
+    try {
+      const [resConductors, resRoutes] = await Promise.all([
+        fetch(`/api/fleet?action=get_conductors&terminal_id=${terminalId}`).then(r => r.json()),
+        fetch(`/api/fleet?action=get_routes&terminal_id=${terminalId}`).then(r => r.json())
+      ]);
+      if (resConductors.status === "ok") setConductorsList(resConductors.data || []);
+      if (resRoutes.status === "ok") setRoutesList(resRoutes.data || []);
+    } catch (err) {
+      console.warn("No se pudieron cargar los conductores/rutas desde el backend:", err);
+      setConductorsList([
+        { id_conductor: 1, nombre: "Carla Pizarro (Fallback)", licencia: "A2" },
+        { id_conductor: 2, nombre: "Juan Rojas (Fallback)", licencia: "A2" },
+      ]);
+      setRoutesList([
+        { id_ruta: 1, codigo_recorrido: "406", descripcion: "Alameda" },
+        { id_ruta: 2, codigo_recorrido: "407", descripcion: "Las Condes" },
+      ]);
+    }
+  };
+
+  const handleCreateAssignment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedBusId || !selectedConductorId || !selectedRouteId) {
+      alert("Por favor completa todos los campos.");
+      return;
+    }
+
+    try {
+      const res = await fetch("/api/fleet", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "create_assignment",
+          params: {
+            id_bus: parseInt(selectedBusId, 10),
+            id_conductor: parseInt(selectedConductorId, 10),
+            id_ruta: parseInt(selectedRouteId, 10),
+            id_terminal: terminalId,
+            fecha_hora_inicio: new Date().toISOString(),
+          }
+        })
+      }).then(r => r.json());
+
+      if (res.status === "ok") {
+        setActionMsg("¡Asignación creada exitosamente en base de datos!");
+        setIsAssignModalOpen(false);
+        fetchData();
+        setTimeout(() => setActionMsg(null), 10000);
+      } else {
+        alert("Error al crear asignación: " + res.message);
+      }
+    } catch (err) {
+      console.warn("Error enviando asignación, simulando flujo:", err);
+      setActionMsg("¡Asignación simulada exitosamente (Modo Demostración)!");
+      setIsAssignModalOpen(false);
+      setTimeout(() => setActionMsg(null), 10000);
+    }
+  };
+
 
   // Construir filas a partir de datos reales o mock
   let displayFleetRows = mockFleetRows;
@@ -176,8 +250,15 @@ export default function TerminalFleetPage() {
         actions={
           <>
             <button
-              onClick={handleIngresarMantenimiento}
+              onClick={handleOpenAssignModal}
               className="btn btn-primary cursor-pointer gap-2"
+            >
+              <UserRound className="h-4 w-4" />
+              Asignación Manual
+            </button>
+            <button
+              onClick={handleIngresarMantenimiento}
+              className="btn btn-secondary cursor-pointer gap-2"
             >
               <Wrench className="h-4 w-4" />
               Ingresar a Mantenimiento
@@ -190,6 +271,7 @@ export default function TerminalFleetPage() {
             </button>
           </>
         }
+
       />
 
       {actionMsg && (
@@ -294,6 +376,91 @@ export default function TerminalFleetPage() {
           </Panel>
         </div>
       </section>
+
+      {isAssignModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md rounded-2xl border border-white/10 bg-slate-900/90 p-6 text-slate-100 shadow-2xl backdrop-blur-md">
+            <h3 className="text-xl font-bold text-slate-100">Crear Asignación Manual</h3>
+            <p className="mt-1 text-xs text-slate-400">Vincula una máquina libre con un conductor y recorrido.</p>
+            
+            <form onSubmit={handleCreateAssignment} className="mt-4 space-y-4">
+              <div>
+                <label className="block text-xs uppercase tracking-wider text-slate-400 font-semibold mb-1">Bus (Máquina libre)</label>
+                <select
+                  value={selectedBusId}
+                  onChange={(e) => setSelectedBusId(e.target.value)}
+                  className="w-full rounded-xl border border-white/10 bg-slate-800/80 px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-blue-500"
+                  required
+                >
+                  <option value="">Seleccione un bus...</option>
+                  {isRealData ? (
+                    buses
+                      .filter(b => !assignments.some(a => a.id_bus === b.id_bus))
+                      .map((b) => (
+                        <option key={b.id_bus} value={b.id_bus}>{b.patente} ({b.tipo_energia}) - {b.modelo}</option>
+                      ))
+                  ) : (
+                    <>
+                      <option value="1">EB-214 (Eléctrico)</option>
+                      <option value="2">EB-301 (Eléctrico)</option>
+                      <option value="6">D-226 (Diésel)</option>
+                    </>
+                  )}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs uppercase tracking-wider text-slate-400 font-semibold mb-1">Conductor</label>
+                <select
+                  value={selectedConductorId}
+                  onChange={(e) => setSelectedConductorId(e.target.value)}
+                  className="w-full rounded-xl border border-white/10 bg-slate-800/80 px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-blue-500"
+                  required
+                >
+                  <option value="">Seleccione un conductor...</option>
+                  {conductorsList
+                    .filter(c => !assignments.some(a => a.id_conductor === c.id_conductor))
+                    .map((c) => (
+                      <option key={c.id_conductor} value={c.id_conductor}>{c.nombre} (Lic. {c.licencia || "A2"})</option>
+                    ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs uppercase tracking-wider text-slate-400 font-semibold mb-1">Ruta (Servicio)</label>
+                <select
+                  value={selectedRouteId}
+                  onChange={(e) => setSelectedRouteId(e.target.value)}
+                  className="w-full rounded-xl border border-white/10 bg-slate-800/80 px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-blue-500"
+                  required
+                >
+                  <option value="">Seleccione un servicio...</option>
+                  {routesList.map((r) => (
+                    <option key={r.id_ruta} value={r.id_ruta}>{r.codigo_recorrido} - {r.descripcion || "Ruta"}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex justify-end gap-3 mt-6">
+                <button
+                  type="button"
+                  onClick={() => setIsAssignModalOpen(false)}
+                  className="px-4 py-2 rounded-xl text-sm font-semibold text-slate-300 bg-white/5 hover:bg-white/10 transition cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 rounded-xl text-sm font-semibold text-white bg-blue-600 hover:bg-blue-500 transition cursor-pointer"
+                >
+                  Asignar Unidad
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </main>
+
   );
 }

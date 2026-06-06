@@ -15,6 +15,12 @@ import os
 import json
 import time
 
+# Forzar UTF-8 en stdout/stderr para que los caracteres Unicode se impriman correctamente en Windows.
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from soa_lib import connect_to_bus, send_json, receive_json
