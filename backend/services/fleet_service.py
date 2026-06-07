@@ -236,6 +236,21 @@ def handle_get_terminals(params: dict) -> dict:
     return {"status": "ok", "data": terminals, "count": len(terminals)}
 
 
+def handle_end_assignment(params: dict) -> dict:
+    """Finaliza una asignación estableciendo fecha_hora_fin (salida registrada)."""
+    assignment_id = params.get("id_asignacion")
+    if not assignment_id:
+        return {"status": "error", "message": "id_asignacion requerido"}
+
+    import datetime
+    now_str = datetime.datetime.now().isoformat()
+    execute(
+        "UPDATE asignacion SET fecha_hora_fin = ? WHERE id_asignacion = ?",
+        (now_str, assignment_id),
+    )
+    return {"status": "ok", "message": "Asignación finalizada (salida registrada)"}
+
+
 # ── Dispatcher ────────────────────────────────────────────────────────────────
 
 ACTIONS = {
@@ -244,6 +259,7 @@ ACTIONS = {
     "get_conductors": handle_get_conductors,
     "get_assignments": handle_get_assignments,
     "create_assignment": handle_create_assignment,
+    "end_assignment": handle_end_assignment,
     "get_segments": handle_get_segments,
     "get_routes": handle_get_routes,
     "get_terminals": handle_get_terminals,
