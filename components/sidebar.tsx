@@ -25,6 +25,7 @@ import {
 import { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import { workspaceCollections, resolveArea } from "@/lib/sicof-navigation";
+import { usePermissions, isRouteAllowed } from "@/lib/permissions-context";
 
 // Mapeo de íconos para cada link del workspace para dar una visual muy rica
 const ICON_MAP: Record<string, any> = {
@@ -48,6 +49,7 @@ export function Sidebar() {
   const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
   const [user, setUser] = useState<{ nombre: string; rol: string; username: string } | null>(null);
+  const { grantedPerms } = usePermissions();
 
   const area = resolveArea(pathname);
   const isWorkspace = area === "terminal" || area === "cof" || area === "admin";
@@ -81,6 +83,28 @@ export function Sidebar() {
   const navigationItems = links.map((link) => {
     const isActive = pathname === link.href;
     const Icon = ICON_MAP[link.label] || LayoutDashboard;
+    const allowed = isRouteAllowed(link.href, grantedPerms);
+
+    if (!allowed) {
+      // Mostrar el link deshabilitado con candado para comunicar la restricción
+      return (
+        <li key={link.href} className="relative">
+          <span
+            className="group flex items-center gap-3.5 rounded-xl border border-transparent px-4 py-3 text-sm font-semibold opacity-35 cursor-not-allowed select-none"
+            title={`Sin permiso para acceder a ${link.label}`}
+          >
+            <Icon className="h-[18px] w-[18px] text-slate-600" />
+            <div className="flex-1 min-w-0">
+              <span className="block truncate text-slate-600">{link.label}</span>
+            </div>
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 text-slate-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+              <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+            </svg>
+          </span>
+        </li>
+      );
+    }
 
     return (
       <li key={link.href} className="relative">

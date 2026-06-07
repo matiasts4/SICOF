@@ -184,14 +184,19 @@ def execute(sql: str, params: tuple = ()) -> int:
         postgres_sql = sql.replace("?", "%s")
         cursor.execute(postgres_sql, params or None)
 
-        # Intentar obtener el ID del último INSERT (si la tabla tiene secuencia)
+        # Intentar obtener el ID del último INSERT (si la tabla tiene secuencia).
+        # Se usa un SAVEPOINT para que si LASTVAL() falla (tablas con PK compuesta
+        # sin secuencia, como rol_permiso), la transacción principal no quede abortada.
         last_id = 0
         if sql.strip().upper().startswith("INSERT"):
             try:
+                cursor.execute("SAVEPOINT _lastval_check")
                 cursor.execute("SELECT LASTVAL()")
                 last_id = cursor.fetchone()[0]
+                cursor.execute("RELEASE SAVEPOINT _lastval_check")
             except Exception:
-                pass
+                # Revertir solo al savepoint, preservando el INSERT original
+                cursor.execute("ROLLBACK TO SAVEPOINT _lastval_check")
 
         conn.commit()
         conn.close()

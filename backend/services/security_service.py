@@ -5,6 +5,10 @@ Acciones:
   - login: valida credenciales, retorna token JWT
   - validate: verifica token, retorna perfil del usuario
   - list_users: lista usuarios (solo Admin TI)
+  - create_user: crea un nuevo usuario (solo Admin TI)
+  - delete_user: soft-delete de usuario (solo Admin TI)
+  - toggle_rol_permiso: agrega o quita un permiso a un rol (solo Admin TI)
+  - list_permisos: lista todos los permisos disponibles
 
 RF asociados: RF-003 (Control de Acceso por Terminal)
 """
@@ -20,7 +24,7 @@ import base64
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from soa_lib import connect_to_bus, send_message, receive_message
-from db.connection import query
+from db.connection import query, execute
 
 SERVICE_NAME = "segur"
 JWT_SECRET = "sicof_secret_key_2026"
@@ -107,12 +111,17 @@ def handle_login(params: dict) -> dict:
     if not username or not password:
         return {"status": "error", "message": "Username y password requeridos"}
 
-    users = query("SELECT * FROM usuario WHERE username = ? AND activo = 1", (username,))
+    # Primero buscar el usuario sin filtro de activo
+    users = query("SELECT * FROM usuario WHERE username = ?", (username,))
 
     if not users:
         return {"status": "error", "message": "Credenciales inválidas"}
 
     user = users[0]
+
+    # Verificar si la cuenta está suspendida antes de validar contraseña
+    if not user["activo"]:
+        return {"status": "error", "message": "Usuario suspendido. Contacta al administrador TI."}
 
     # Verificar contraseña (en desarrollo, comparación simple)
     # El seed usa un hash placeholder, así que aceptamos "sicof2026" como contraseña universal
@@ -143,7 +152,7 @@ def handle_login(params: dict) -> dict:
 
 
 def handle_validate(params: dict) -> dict:
-    """Validación de token JWT."""
+    """Validación de token JWT. Además verifica que el usuario siga activo en la BD."""
     token = params.get("token", "")
 
     if not token:
@@ -153,6 +162,14 @@ def handle_validate(params: dict) -> dict:
 
     if payload is None:
         return {"status": "error", "message": "Token inválido o expirado"}
+
+    # Verificar que la cuenta sigue activa en la base de datos
+    db_user = query(
+        "SELECT activo, nombre, rol, id_terminal FROM usuario WHERE id_usuario = ? AND activo = 1",
+        (payload["user_id"],)
+    )
+    if not db_user:
+        return {"status": "error", "message": "Cuenta suspendida o no encontrada"}
 
     return {
         "status": "ok",
@@ -179,6 +196,117 @@ def handle_list_users(params: dict) -> dict:
 
     users = query(sql, args)
     return {"status": "ok", "data": users}
+
+
+def handle_create_user(params: dict) -> dict:
+    """Crea un nuevo usuario en el sistema (solo Admin TI)."""
+    # Leer desde 'new_username' para evitar conflicto con params.username del admin autenticado
+    username = params.get("new_username", "").strip()
+    nombre = params.get("nombre", "").strip()
+    rol = params.get("rol", "").strip()
+    password = params.get("password", "").strip()
+    id_terminal = params.get("id_terminal")  # puede ser None
+    actor = params.get("username_actor", "admin")
+
+    roles_validos = ["Despachador", "Admin COF", "Admin TI"]
+    if not username or not nombre or not rol or not password:
+        return {"status": "error", "message": "username, nombre, rol y password son requeridos"}
+    if rol not in roles_validos:
+        return {"status": "error", "message": f"Rol inválido. Debe ser uno de: {', '.join(roles_validos)}"}
+
+    existente = query("SELECT id_usuario FROM usuario WHERE username = ?", (username,))
+    if existente:
+        return {"status": "error", "message": f"El username '{username}' ya existe"}
+
+    pwd_hash = hash_password(password)
+    terminal_val = int(id_terminal) if id_terminal else None
+
+    execute(
+        "INSERT INTO usuario (username, password_hash, nombre, rol, id_terminal, activo) VALUES (?, ?, ?, ?, ?, 1)",
+        (username, pwd_hash, nombre, rol, terminal_val)
+    )
+
+    nuevo = query("SELECT id_usuario FROM usuario WHERE username = ?", (username,))
+    nuevo_id = nuevo[0]["id_usuario"] if nuevo else None
+
+    execute(
+        "INSERT INTO auditoria (username, accion, tabla_afectada, registro_id, detalles, fecha_hora) VALUES (?, ?, ?, ?, ?, ?)",
+        (actor, "CREATE", "usuario", nuevo_id, f"Nuevo usuario '{username}' con rol '{rol}'", time.strftime("%Y-%m-%dT%H:%M:%S"))
+    )
+
+    return {"status": "ok", "message": f"Usuario '{username}' creado exitosamente", "id_usuario": nuevo_id}
+
+
+def handle_delete_user(params: dict) -> dict:
+    """Soft-delete de usuario: pone activo = 0 (solo Admin TI)."""
+    id_usuario = params.get("id_usuario")
+    actor = params.get("username_actor", "admin")
+
+    if not id_usuario:
+        return {"status": "error", "message": "id_usuario es requerido"}
+
+    existing = query("SELECT username, activo FROM usuario WHERE id_usuario = ?", (int(id_usuario),))
+    if not existing:
+        return {"status": "error", "message": f"Usuario {id_usuario} no encontrado"}
+
+    user = existing[0]
+    nuevo_estado = 0 if user["activo"] == 1 else 1
+    accion_label = "SUSPEND" if nuevo_estado == 0 else "RESTORE"
+    estado_label = "suspendido" if nuevo_estado == 0 else "restaurado"
+
+    execute("UPDATE usuario SET activo = ? WHERE id_usuario = ?", (nuevo_estado, int(id_usuario)))
+
+    execute(
+        "INSERT INTO auditoria (username, accion, tabla_afectada, registro_id, detalles, fecha_hora) VALUES (?, ?, ?, ?, ?, ?)",
+        (actor, accion_label, "usuario", int(id_usuario), f"Usuario '{user['username']}' {estado_label}", time.strftime("%Y-%m-%dT%H:%M:%S"))
+    )
+
+    return {"status": "ok", "message": f"Usuario '{user['username']}' {estado_label}", "nuevo_activo": nuevo_estado}
+
+
+def handle_toggle_rol_permiso(params: dict) -> dict:
+    """Agrega o quita un permiso de un rol en la tabla rol_permiso."""
+    rol = params.get("rol", "").strip()
+    id_permiso = params.get("id_permiso")
+    actor = params.get("username_actor", "admin")
+
+    roles_validos = ["Despachador", "Admin COF", "Admin TI"]
+    if not rol or not id_permiso:
+        return {"status": "error", "message": "rol e id_permiso son requeridos"}
+    if rol not in roles_validos:
+        return {"status": "error", "message": f"Rol inválido: {rol}"}
+
+    id_permiso = int(id_permiso)
+
+    # Verificar que el permiso existe
+    permiso_row = query("SELECT codigo, nombre FROM permiso WHERE id_permiso = ?", (id_permiso,))
+    if not permiso_row:
+        return {"status": "error", "message": f"Permiso {id_permiso} no encontrado"}
+
+    perm = permiso_row[0]
+    ya_tiene = query("SELECT 1 FROM rol_permiso WHERE rol = ? AND id_permiso = ?", (rol, id_permiso))
+
+    if ya_tiene:
+        execute("DELETE FROM rol_permiso WHERE rol = ? AND id_permiso = ?", (rol, id_permiso))
+        accion = "REVOKE"
+        mensaje = f"Permiso '{perm['nombre']}' quitado del rol '{rol}'"
+    else:
+        execute("INSERT INTO rol_permiso (rol, id_permiso) VALUES (?, ?)", (rol, id_permiso))
+        accion = "GRANT"
+        mensaje = f"Permiso '{perm['nombre']}' asignado al rol '{rol}'"
+
+    execute(
+        "INSERT INTO auditoria (username, accion, tabla_afectada, registro_id, detalles, fecha_hora) VALUES (?, ?, ?, ?, ?, ?)",
+        (actor, accion, "rol_permiso", id_permiso, mensaje, time.strftime("%Y-%m-%dT%H:%M:%S"))
+    )
+
+    return {"status": "ok", "message": mensaje, "granted": not bool(ya_tiene)}
+
+
+def handle_list_permisos(params: dict) -> dict:
+    """Lista todos los permisos disponibles en el sistema."""
+    permisos = query("SELECT id_permiso, codigo, nombre, descripcion FROM permiso ORDER BY id_permiso")
+    return {"status": "ok", "data": permisos}
 
 
 
@@ -262,6 +390,10 @@ ACTIONS = {
     "login": handle_login,
     "validate": handle_validate,
     "list_users": handle_list_users,
+    "create_user": handle_create_user,
+    "delete_user": handle_delete_user,
+    "toggle_rol_permiso": handle_toggle_rol_permiso,
+    "list_permisos": handle_list_permisos,
     "get_audit_logs": handle_get_audit_logs,
     "log_action": handle_log_action,
     "get_params": handle_get_params,
