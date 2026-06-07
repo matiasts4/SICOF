@@ -47,7 +47,7 @@ export default function LoginPage() {
           router.push("/");
         }
       } else {
-        setError(data.message || "Credenciales incorrectas");
+        setError(data.message || "Credenciales inválidas");
       }
     } catch (err) {
       setError("No se pudo conectar con el servicio de autenticación");

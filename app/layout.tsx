@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 
 import { AuthGuard } from "@/components/auth-guard";
 import { MainLayoutWrapper } from "@/components/main-layout-wrapper";
+import { PermissionsProvider } from "@/lib/permissions-context";
 
 import "./globals.css";
 
@@ -33,9 +34,11 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     <html lang="es" className="dark">
       <body className={`${manrope.variable} ${sora.variable} ${jetBrainsMono.variable} bg-[#080a0f]`}>
         <div className="relative min-h-screen overflow-x-hidden">
-          <AuthGuard>
-            <MainLayoutWrapper>{children}</MainLayoutWrapper>
-          </AuthGuard>
+          <PermissionsProvider>
+            <AuthGuard>
+              <MainLayoutWrapper>{children}</MainLayoutWrapper>
+            </AuthGuard>
+          </PermissionsProvider>
         </div>
       </body>
     </html>

@@ -65,6 +65,7 @@ export async function POST(request: NextRequest) {
 
     // Inyectar el username del operador autenticado para fines de auditoría
     params.username = user.username;
+    params.username_actor = user.username;
 
     const result = await sendToService("segur", { action, params });
     return NextResponse.json(result);
