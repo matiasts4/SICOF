@@ -15,7 +15,7 @@ import json
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from soa_lib import connect_to_bus, send_message, receive_message
+from soa_lib import connect_to_bus, send_message, receive_message, request_service
 from db.connection import query
 
 SERVICE_NAME = "frecu"
@@ -26,25 +26,23 @@ def handle_get_intervals(params: dict) -> dict:
     terminal_id = params.get("terminal_id")
     route_id = params.get("route_id")
 
-    # Obtener rutas relevantes
-    sql = "SELECT * FROM ruta"
-    args = ()
-    if terminal_id:
-        sql += " WHERE id_terminal = ?"
-        args = (terminal_id,)
-    elif route_id:
-        sql += " WHERE id_ruta = ?"
-        args = (route_id,)
+    # Obtener rutas relevantes desde el servicio de flota
+    routes_resp = request_service("flota", "get_routes", {"terminal_id": terminal_id} if terminal_id else {})
+    if routes_resp.get("status") != "ok":
+        return {"status": "error", "message": "Error al obtener rutas del servicio de flota"}
 
-    routes = query(sql, args)
+    routes = routes_resp.get("data", [])
+    if route_id:
+        routes = [r for r in routes if r["id_ruta"] == route_id]
+
+    # Obtener todas las asignaciones activas desde el servicio de flota para contar por ruta
+    assignments_resp = request_service("flota", "get_assignments", {"terminal_id": terminal_id} if terminal_id else {})
+    assignments = assignments_resp.get("data", []) if assignments_resp.get("status") == "ok" else []
 
     intervals = []
     for route in routes:
         # Contar buses activamente asignados a esta ruta
-        assigned = query(
-            "SELECT COUNT(*) as count FROM asignacion WHERE id_ruta = ? AND fecha_hora_fin IS NULL",
-            (route["id_ruta"],),
-        )[0]["count"]
+        assigned = sum(1 for a in assignments if a.get("id_ruta") == route["id_ruta"])
 
         target = route["frecuencia_min"]
         # Simular intervalo actual basado en cantidad de buses
@@ -87,19 +85,26 @@ def handle_get_alerts(params: dict) -> dict:
 
 def handle_get_corridor_status(params: dict) -> dict:
     """Estado agregado por corredor (US4 / US6)."""
+    # Obtener todas las rutas del servicio de flota
+    routes_resp = request_service("flota", "get_routes")
+    if routes_resp.get("status") != "ok":
+        return {"status": "error", "message": "Error al obtener rutas del servicio de flota"}
+    all_routes = routes_resp.get("data", [])
+
     # US6: rutas 4xx (troncales)
-    us6_routes = query("SELECT * FROM ruta WHERE codigo_recorrido LIKE '4%'")
+    us6_routes = [r for r in all_routes if r["codigo_recorrido"].startswith("4")]
     # US4: rutas B/C (alimentadores)
-    us4_routes = query("SELECT * FROM ruta WHERE codigo_recorrido LIKE 'B%' OR codigo_recorrido LIKE 'C%'")
+    us4_routes = [r for r in all_routes if r["codigo_recorrido"].startswith("B") or r["codigo_recorrido"].startswith("C")]
+
+    # Obtener asignaciones activas de flota una sola vez
+    assignments_resp = request_service("flota", "get_assignments")
+    all_assignments = assignments_resp.get("data", []) if assignments_resp.get("status") == "ok" else []
 
     def corridor_summary(routes, name):
         total_deviation = 0
         critical = 0
         for r in routes:
-            assigned = query(
-                "SELECT COUNT(*) as count FROM asignacion WHERE id_ruta = ? AND fecha_hora_fin IS NULL",
-                (r["id_ruta"],),
-            )[0]["count"]
+            assigned = sum(1 for a in all_assignments if a.get("id_ruta") == r["id_ruta"])
             target = r["frecuencia_min"]
             actual = target * (1 + (0.3 if assigned < 3 else -0.1)) if assigned > 0 else target * 2
             dev = actual - target

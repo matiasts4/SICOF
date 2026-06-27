@@ -17,7 +17,7 @@ import json
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from soa_lib import connect_to_bus, send_message, receive_message
+from soa_lib import connect_to_bus, send_message, receive_message, request_service
 from db.connection import query, execute
 
 SERVICE_NAME = "carga"
@@ -45,17 +45,23 @@ def handle_get_charge(params: dict) -> dict:
     if not bus_id:
         return {"status": "error", "message": "id_bus requerido"}
 
+    # Obtener patente de bus desde el servicio de flota
+    bus_resp = request_service("flota", "get_bus", {"bus_id": bus_id})
+    if bus_resp.get("status") != "ok":
+        return {"status": "error", "message": "Error al obtener bus del servicio de flota"}
+    
+    patente = bus_resp.get("data", {}).get("patente", "")
+
     rows = query(
-        """SELECT ec.*, b.patente
-           FROM estado_carga ec
-           JOIN bus b ON ec.id_bus = b.id_bus
-           WHERE ec.id_bus = ? ORDER BY ec.timestamp DESC LIMIT 1""",
+        """SELECT * FROM estado_carga
+           WHERE id_bus = ? ORDER BY timestamp DESC LIMIT 1""",
         (bus_id,),
     )
     if not rows:
         return {"status": "error", "message": "Sin datos de carga"}
 
     row = rows[0]
+    row["patente"] = patente
     level = row["nivel_carga"]
     row["status_label"] = (
         "Crítico" if level < SOC_CRITICAL else
@@ -76,25 +82,41 @@ def handle_get_alerts(params: dict) -> dict:
     if not terminal_id:
         return {"status": "error", "message": "terminal_id requerido"}
 
-    # Último SoC de cada bus eléctrico del terminal
-    rows = query(
-        """SELECT ec.id_bus, ec.nivel_carga, ec.autonomia_km, ec.timestamp, b.patente
-           FROM estado_carga ec
-           JOIN bus b ON ec.id_bus = b.id_bus
-           INNER JOIN (
-               SELECT id_bus, MAX(timestamp) as max_ts
-               FROM estado_carga GROUP BY id_bus
-           ) latest ON ec.id_bus = latest.id_bus AND ec.timestamp = latest.max_ts
-           WHERE b.id_terminal = ? AND b.tipo_energia = 'Eléctrico' AND ec.nivel_carga < ?
-           ORDER BY ec.nivel_carga ASC""",
-        (terminal_id, SOC_WARNING),
-    )
+    # Obtener buses eléctricos del terminal desde el servicio de flota
+    buses_resp = request_service("flota", "get_buses", {"terminal_id": terminal_id})
+    if buses_resp.get("status") != "ok":
+        return {"status": "error", "message": "Error al obtener buses del servicio de flota"}
 
+    electric_buses = [b for b in buses_resp.get("data", []) if b.get("tipo_energia") == "Eléctrico"]
+    if not electric_buses:
+        return {"status": "ok", "data": [], "count": 0}
+
+    bus_ids = [b["id_bus"] for b in electric_buses]
+    placeholders = ",".join("?" for _ in bus_ids)
+
+    # Último SoC de cada bus eléctrico de la lista
+    sql = f"""
+        SELECT ec.id_bus, ec.nivel_carga, ec.autonomia_km, ec.timestamp
+        FROM estado_carga ec
+        INNER JOIN (
+            SELECT id_bus, MAX(timestamp) as max_ts
+            FROM estado_carga
+            WHERE id_bus IN ({placeholders})
+            GROUP BY id_bus
+        ) latest ON ec.id_bus = latest.id_bus AND ec.timestamp = latest.max_ts
+        WHERE ec.nivel_carga < ?
+        ORDER BY ec.nivel_carga ASC
+    """
+    args = tuple(bus_ids) + (SOC_WARNING,)
+    rows = query(sql, args)
+
+    patente_map = {b["id_bus"]: b["patente"] for b in electric_buses}
     alerts = []
     for row in rows:
         level = row["nivel_carga"]
         alerts.append({
             **row,
+            "patente": patente_map.get(row["id_bus"], ""),
             "severity": "Crítico" if level < SOC_CRITICAL else "Advertencia",
             "tone": "red" if level < SOC_CRITICAL else "orange",
         })
@@ -108,26 +130,39 @@ def handle_get_charger_status(params: dict) -> dict:
     if not terminal_id:
         return {"status": "error", "message": "terminal_id requerido"}
 
-    # Buses eléctricos con su SoC más reciente
-    rows = query(
-        """SELECT ec.id_bus, ec.nivel_carga, ec.autonomia_km, b.patente
-           FROM estado_carga ec
-           JOIN bus b ON ec.id_bus = b.id_bus
-           INNER JOIN (
-               SELECT id_bus, MAX(timestamp) as max_ts
-               FROM estado_carga GROUP BY id_bus
-           ) latest ON ec.id_bus = latest.id_bus AND ec.timestamp = latest.max_ts
-           WHERE b.id_terminal = ? AND b.tipo_energia = 'Eléctrico'
-           ORDER BY ec.nivel_carga ASC""",
-        (terminal_id,),
-    )
+    # Obtener buses eléctricos del terminal desde el servicio de flota
+    buses_resp = request_service("flota", "get_buses", {"terminal_id": terminal_id})
+    if buses_resp.get("status") != "ok":
+        return {"status": "error", "message": "Error al obtener buses del servicio de flota"}
 
+    electric_buses = [b for b in buses_resp.get("data", []) if b.get("tipo_energia") == "Eléctrico"]
+    if not electric_buses:
+        return {"status": "ok", "data": []}
+
+    bus_ids = [b["id_bus"] for b in electric_buses]
+    placeholders = ",".join("?" for _ in bus_ids)
+
+    # Buses eléctricos con su SoC más reciente
+    sql = f"""
+        SELECT ec.id_bus, ec.nivel_carga, ec.autonomia_km
+        FROM estado_carga ec
+        INNER JOIN (
+            SELECT id_bus, MAX(timestamp) as max_ts
+            FROM estado_carga
+            WHERE id_bus IN ({placeholders})
+            GROUP BY id_bus
+        ) latest ON ec.id_bus = latest.id_bus AND ec.timestamp = latest.max_ts
+        ORDER BY ec.nivel_carga ASC
+    """
+    rows = query(sql, tuple(bus_ids))
+
+    patente_map = {b["id_bus"]: b["patente"] for b in electric_buses}
     chargers = []
     for i, row in enumerate(rows):
         level = row["nivel_carga"]
         chargers.append({
             "bay": f"Cargador {i + 1}",
-            "bus": row["patente"],
+            "bus": patente_map.get(row["id_bus"], ""),
             "soc": f"{level}%",
             "status": "Crítico" if level < SOC_CRITICAL else "Cargando" if level < 80 else "Listo",
             "tone": "red" if level < SOC_CRITICAL else "orange" if level < SOC_WARNING else "green",
@@ -141,27 +176,50 @@ def handle_get_terminal_summary(params: dict) -> dict:
     if not terminal_id:
         return {"status": "error", "message": "terminal_id requerido"}
 
-    total = query(
-        "SELECT COUNT(*) as count FROM bus WHERE id_terminal = ? AND tipo_energia = 'Eléctrico' AND activo = 1",
-        (terminal_id,),
-    )[0]["count"]
+    # Obtener buses eléctricos del terminal desde el servicio de flota
+    buses_resp = request_service("flota", "get_buses", {"terminal_id": terminal_id})
+    if buses_resp.get("status") != "ok":
+        return {"status": "error", "message": "Error al obtener buses del servicio de flota"}
+
+    electric_buses = [b for b in buses_resp.get("data", []) if b.get("tipo_energia") == "Eléctrico"]
+    total = len(electric_buses)
+
+    if total == 0:
+        return {
+            "status": "ok",
+            "data": {
+                "total_electric": 0,
+                "alerts": 0,
+                "critical": 0,
+                "healthy": 0,
+            },
+        }
+
+    bus_ids = [b["id_bus"] for b in electric_buses]
+    placeholders = ",".join("?" for _ in bus_ids)
 
     alerts_count = query(
-        """SELECT COUNT(*) as count FROM estado_carga ec
-           JOIN bus b ON ec.id_bus = b.id_bus
-           INNER JOIN (SELECT id_bus, MAX(timestamp) as max_ts FROM estado_carga GROUP BY id_bus)
-               latest ON ec.id_bus = latest.id_bus AND ec.timestamp = latest.max_ts
-           WHERE b.id_terminal = ? AND b.tipo_energia = 'Eléctrico' AND ec.nivel_carga < ?""",
-        (terminal_id, SOC_WARNING),
+        f"""SELECT COUNT(*) as count FROM estado_carga ec
+           INNER JOIN (
+               SELECT id_bus, MAX(timestamp) as max_ts
+               FROM estado_carga
+               WHERE id_bus IN ({placeholders})
+               GROUP BY id_bus
+           ) latest ON ec.id_bus = latest.id_bus AND ec.timestamp = latest.max_ts
+           WHERE ec.nivel_carga < ?""",
+        tuple(bus_ids) + (SOC_WARNING,),
     )[0]["count"]
 
     critical_count = query(
-        """SELECT COUNT(*) as count FROM estado_carga ec
-           JOIN bus b ON ec.id_bus = b.id_bus
-           INNER JOIN (SELECT id_bus, MAX(timestamp) as max_ts FROM estado_carga GROUP BY id_bus)
-               latest ON ec.id_bus = latest.id_bus AND ec.timestamp = latest.max_ts
-           WHERE b.id_terminal = ? AND b.tipo_energia = 'Eléctrico' AND ec.nivel_carga < ?""",
-        (terminal_id, SOC_CRITICAL),
+        f"""SELECT COUNT(*) as count FROM estado_carga ec
+           INNER JOIN (
+               SELECT id_bus, MAX(timestamp) as max_ts
+               FROM estado_carga
+               WHERE id_bus IN ({placeholders})
+               GROUP BY id_bus
+           ) latest ON ec.id_bus = latest.id_bus AND ec.timestamp = latest.max_ts
+           WHERE ec.nivel_carga < ?""",
+        tuple(bus_ids) + (SOC_CRITICAL,),
     )[0]["count"]
 
     return {

@@ -98,3 +98,31 @@ def receive_json(sock: socket.socket) -> tuple[str, dict]:
     except json.JSONDecodeError:
         data = {"raw": payload_str}
     return service_name, data
+
+
+def request_service(target_service: str, action: str, params: dict = {}) -> dict:
+    """
+    Realiza una solicitud síncrona TCP a otro servicio a través del BUS.
+    Abre una conexión temporal, envía la petición y retorna la respuesta.
+    """
+    import os
+    host = os.environ.get("SOA_BUS_HOST", "localhost")
+    port = int(os.environ.get("SOA_BUS_PORT", "5000"))
+
+    try:
+        sock = connect_to_bus(host, port)
+    except Exception as e:
+        return {"status": "error", "message": f"Error conectando al BUS para llamar a '{target_service}': {e}"}
+
+    try:
+        send_json(sock, target_service, {"action": action, "params": params})
+        _, response = receive_json(sock)
+        return response
+    except Exception as e:
+        return {"status": "error", "message": f"Error llamando a servicio '{target_service}': {e}"}
+    finally:
+        try:
+            sock.close()
+        except Exception:
+            pass
+

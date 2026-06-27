@@ -16,7 +16,7 @@ import json
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from soa_lib import connect_to_bus, send_message, receive_message
+from soa_lib import connect_to_bus, send_message, receive_message, request_service
 from db.connection import query
 
 SERVICE_NAME = "repor"
@@ -26,30 +26,37 @@ def handle_get_operation_summary(params: dict) -> dict:
     """KPIs agregados por terminal o global."""
     terminal_id = params.get("terminal_id")
 
+    # Obtener terminales desde el servicio de flota
+    terminals_resp = request_service("flota", "get_terminals")
+    if terminals_resp.get("status") != "ok":
+        return {"status": "error", "message": "Error al obtener terminales del servicio de flota"}
+
+    terminals = terminals_resp.get("data", [])
     if terminal_id:
-        terminals = query("SELECT * FROM terminal WHERE id_terminal = ?", (terminal_id,))
-    else:
-        terminals = query("SELECT * FROM terminal")
+        terminals = [t for t in terminals if t["id_terminal"] == terminal_id]
 
     summaries = []
     for t in terminals:
         tid = t["id_terminal"]
 
-        buses_total = query("SELECT COUNT(*) as c FROM bus WHERE id_terminal = ? AND activo = 1", (tid,))[0]["c"]
-        buses_electric = query(
-            "SELECT COUNT(*) as c FROM bus WHERE id_terminal = ? AND tipo_energia = 'Eléctrico' AND activo = 1",
-            (tid,),
-        )[0]["c"]
-        drivers = query("SELECT COUNT(*) as c FROM conductor WHERE id_terminal = ? AND activo = 1", (tid,))[0]["c"]
-        active_assignments = query(
-            "SELECT COUNT(*) as c FROM asignacion WHERE id_terminal = ? AND fecha_hora_fin IS NULL", (tid,),
-        )[0]["c"]
-        open_incidents = query(
-            """SELECT COUNT(*) as c FROM incidente i
-               JOIN bus b ON i.id_bus = b.id_bus
-               WHERE b.id_terminal = ? AND i.estado != 'Cerrado'""",
-            (tid,),
-        )[0]["c"]
+        # Obtener buses desde el servicio de flota
+        buses_resp = request_service("flota", "get_buses", {"terminal_id": tid})
+        buses = buses_resp.get("data", []) if buses_resp.get("status") == "ok" else []
+        buses_total = len(buses)
+        buses_electric = sum(1 for b in buses if b.get("tipo_energia") == "Eléctrico")
+
+        # Obtener conductores desde el servicio de flota
+        drivers_resp = request_service("flota", "get_conductors", {"terminal_id": tid})
+        drivers = len(drivers_resp.get("data", [])) if drivers_resp.get("status") == "ok" else 0
+
+        # Obtener asignaciones desde el servicio de flota
+        assignments_resp = request_service("flota", "get_assignments", {"terminal_id": tid})
+        active_assignments = len(assignments_resp.get("data", [])) if assignments_resp.get("status") == "ok" else 0
+
+        # Obtener incidentes desde el servicio de incidentes
+        incidents_resp = request_service("incid", "get_incidents", {"terminal_id": tid})
+        incidents = incidents_resp.get("data", []) if incidents_resp.get("status") == "ok" else []
+        open_incidents = sum(1 for i in incidents if i.get("estado") != "Cerrado")
 
         # Cumplimiento simulado basado en asignaciones vs buses
         compliance = round((active_assignments / max(buses_total, 1)) * 100, 1)
@@ -91,14 +98,21 @@ def handle_get_terminal_health(params: dict) -> dict:
 
 def handle_get_kpis(params: dict) -> dict:
     """Indicadores KPI globales para el dashboard COF."""
-    total_buses = query("SELECT COUNT(*) as c FROM bus WHERE activo = 1")[0]["c"]
-    total_electric = query("SELECT COUNT(*) as c FROM bus WHERE tipo_energia = 'Eléctrico' AND activo = 1")[0]["c"]
-    active_assignments = query("SELECT COUNT(*) as c FROM asignacion WHERE fecha_hora_fin IS NULL")[0]["c"]
-    open_incidents = query("SELECT COUNT(*) as c FROM incidente WHERE estado != 'Cerrado'")[0]["c"]
-    critical_incidents = query(
-        "SELECT COUNT(*) as c FROM incidente WHERE estado = 'Escalado' AND severidad IN ('Alta', 'Crítica')"
-    )[0]["c"]
-    terminals_count = query("SELECT COUNT(*) as c FROM terminal")[0]["c"]
+    buses_resp = request_service("flota", "get_buses")
+    buses = buses_resp.get("data", []) if buses_resp.get("status") == "ok" else []
+    total_buses = len(buses)
+    total_electric = sum(1 for b in buses if b.get("tipo_energia") == "Eléctrico")
+
+    assignments_resp = request_service("flota", "get_assignments")
+    active_assignments = len(assignments_resp.get("data", [])) if assignments_resp.get("status") == "ok" else 0
+
+    incidents_resp = request_service("incid", "get_incidents")
+    incidents = incidents_resp.get("data", []) if incidents_resp.get("status") == "ok" else []
+    open_incidents = sum(1 for i in incidents if i.get("estado") != "Cerrado")
+    critical_incidents = sum(1 for i in incidents if i.get("estado") == "Escalado" and i.get("severidad") in ("Alta", "Crítica"))
+
+    terminals_resp = request_service("flota", "get_terminals")
+    terminals_count = len(terminals_resp.get("data", [])) if terminals_resp.get("status") == "ok" else 0
 
     compliance = round((active_assignments / max(total_buses, 1)) * 100, 1)
 
@@ -129,15 +143,24 @@ def handle_get_daily_report(params: dict) -> dict:
     report["terminals"] = summary.get("data", [])
     report["kpis"] = kpis.get("data", [])
 
-    # Incidentes del día
-    incidents = query(
-        """SELECT i.*, b.patente, t.nombre as terminal_nombre
-           FROM incidente i
-           JOIN bus b ON i.id_bus = b.id_bus
-           JOIN terminal t ON b.id_terminal = t.id_terminal
-           ORDER BY i.fecha_hora DESC LIMIT 20"""
-    )
-    report["incidents"] = incidents
+    # Incidentes del día obtenidos a través del servicio de incidentes
+    incidents_resp = request_service("incid", "get_incidents")
+    incidents = incidents_resp.get("data", []) if incidents_resp.get("status") == "ok" else []
+    # Filtrar por terminal si corresponde
+    if terminal_id:
+        # Los incidentes devueltos por el servicio de incidentes ya tienen join con bus, que contiene id_terminal
+        # Pero ojo, en la consulta de get_incidents, el select devuelve b.id_terminal? 
+        # Espera, let's verify if b.id_terminal is returned in get_incidents SELECT statement.
+        # En incident_service.py: SELECT i.*, b.patente, b.tipo_energia, c.nombre as conductor_nombre, t.nombre as terminal_nombre, etc.
+        # Oh, it selects b.id_terminal as part of i.* if it joined or b.*? No, it selects i.* and b.patente, b.tipo_energia...
+        # Wait, does it select b.id_terminal? No, b.id_terminal is not selected explicitly.
+        # Wait, incident table doesn't have terminal_id, but it joined terminal t ON b.id_terminal = t.id_terminal.
+        # So we can pass {"terminal_id": terminal_id} as a parameter directly to request_service("incid", "get_incidents")!
+        # Yes! That is extremely clean and doesn't require filtering in Python!
+        incidents_resp_filtered = request_service("incid", "get_incidents", {"terminal_id": terminal_id})
+        incidents = incidents_resp_filtered.get("data", []) if incidents_resp_filtered.get("status") == "ok" else []
+
+    report["incidents"] = incidents[:20]
 
     return {"status": "ok", "data": report}
 
