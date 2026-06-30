@@ -9,6 +9,7 @@ import { PageIntro } from "@/components/page-intro";
 import { WorkspaceMetricGrid } from "@/components/workspace-metric-grid";
 import { Panel } from "@/components/ui/panel";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { Portal } from "@/components/ui/portal";
 import {
   escalationFlow as mockEscalationFlow,
   evidenceChecklist as mockEvidenceChecklist,
@@ -203,100 +204,102 @@ export default function TerminalIncidentsPage() {
 
       {/* Formulario Modal de Registro de Incidentes */}
       {isFormOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-md">
-          <div className="w-full max-w-lg rounded-3xl border border-white/10 bg-slate-900/90 p-6 shadow-2xl backdrop-blur-xl">
-            <div className="flex items-center justify-between border-b border-white/8 pb-4">
-              <h3 className="text-xl font-bold text-white font-display">Registrar Incidente (BUS TCP)</h3>
-              <button
-                onClick={() => setIsFormOpen(false)}
-                className="rounded-full p-1 text-slate-400 hover:bg-white/8 hover:text-white"
-              >
-                <X className="h-6 w-6" />
-              </button>
-            </div>
-
-            <form onSubmit={handleSubmit} className="mt-4 space-y-4">
-              <div>
-                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400">Bus Involucrado</label>
-                <select
-                  required
-                  value={selectedBusId}
-                  onChange={(e) => setSelectedBusId(e.target.value)}
-                  className="mt-2 block w-full rounded-2xl border border-white/10 bg-white/5 py-3 px-3 text-white focus:border-blue-400 focus:outline-none sm:text-sm"
-                >
-                  <option value="" disabled className="bg-slate-900 text-slate-400">Seleccionar unidad...</option>
-                  {buses.map((bus) => (
-                    <option key={bus.id_bus} value={bus.id_bus} className="bg-slate-900 text-white">
-                      {bus.patente} ({bus.tipo_energia} - {bus.modelo})
-                    </option>
-                  ))}
-                  {buses.length === 0 && (
-                    <option value="1" className="bg-slate-900 text-white">EB-214 (Fallback)</option>
-                  )}
-                </select>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400">Tipo de Incidente</label>
-                  <select
-                    value={incidentType}
-                    onChange={(e) => setIncidentType(e.target.value)}
-                    className="mt-2 block w-full rounded-2xl border border-white/10 bg-white/5 py-3 px-3 text-white focus:border-blue-400 focus:outline-none sm:text-sm"
-                  >
-                    <option value="Vial" className="bg-slate-900">Vial / Choque</option>
-                    <option value="Energía" className="bg-slate-900">Energía / SoC</option>
-                    <option value="Mantenimiento" className="bg-slate-900">Mantenimiento</option>
-                    <option value="Médico" className="bg-slate-900">Médico / Conductor</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400">Severidad</label>
-                  <select
-                    value={severity}
-                    onChange={(e) => setSeverity(e.target.value)}
-                    className="mt-2 block w-full rounded-2xl border border-white/10 bg-white/5 py-3 px-3 text-white focus:border-blue-400 focus:outline-none sm:text-sm"
-                  >
-                    <option value="Baja" className="bg-slate-900">Baja</option>
-                    <option value="Media" className="bg-slate-900">Media</option>
-                    <option value="Alta" className="bg-slate-900">Alta</option>
-                    <option value="Crítica" className="bg-slate-900">Crítica</option>
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400">Descripción</label>
-                <textarea
-                  required
-                  rows={3}
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Detalles sobre lo ocurrido, retrasos proyectados..."
-                  className="mt-2 block w-full rounded-2xl border border-white/10 bg-white/5 py-3 px-3 text-white placeholder-slate-500 focus:border-blue-400 focus:outline-none sm:text-sm"
-                />
-              </div>
-
-              <div className="flex justify-end gap-3 pt-2">
+        <Portal>
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-md">
+            <div className="w-full max-w-lg rounded-3xl border border-white/10 bg-slate-900/90 p-6 shadow-2xl backdrop-blur-xl">
+              <div className="flex items-center justify-between border-b border-white/8 pb-4">
+                <h3 className="text-xl font-bold text-white font-display">Registrar Incidente (BUS TCP)</h3>
                 <button
-                  type="button"
                   onClick={() => setIsFormOpen(false)}
-                  className="btn btn-secondary btn-sm cursor-pointer"
+                  className="rounded-full p-1 text-slate-400 hover:bg-white/8 hover:text-white"
                 >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  className="btn btn-primary btn-sm cursor-pointer"
-                >
-                  {submitting ? "Registrando..." : "Registrar en el BUS"}
+                  <X className="h-6 w-6" />
                 </button>
               </div>
-            </form>
+
+              <form onSubmit={handleSubmit} className="mt-4 space-y-4">
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400">Bus Involucrado</label>
+                  <select
+                    required
+                    value={selectedBusId}
+                    onChange={(e) => setSelectedBusId(e.target.value)}
+                    className="mt-2 block w-full rounded-2xl border border-white/10 bg-white/5 py-3 px-3 text-white focus:border-blue-400 focus:outline-none sm:text-sm"
+                  >
+                    <option value="" disabled className="bg-slate-900 text-slate-400">Seleccionar unidad...</option>
+                    {buses.map((bus) => (
+                      <option key={bus.id_bus} value={bus.id_bus} className="bg-slate-900 text-white">
+                        {bus.patente} ({bus.tipo_energia} - {bus.modelo})
+                      </option>
+                    ))}
+                    {buses.length === 0 && (
+                      <option value="1" className="bg-slate-900 text-white">EB-214 (Fallback)</option>
+                    )}
+                  </select>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400">Tipo de Incidente</label>
+                    <select
+                      value={incidentType}
+                      onChange={(e) => setIncidentType(e.target.value)}
+                      className="mt-2 block w-full rounded-2xl border border-white/10 bg-white/5 py-3 px-3 text-white focus:border-blue-400 focus:outline-none sm:text-sm"
+                    >
+                      <option value="Vial" className="bg-slate-900">Vial / Choque</option>
+                      <option value="Energía" className="bg-slate-900">Energía / SoC</option>
+                      <option value="Mantenimiento" className="bg-slate-900">Mantenimiento</option>
+                      <option value="Médico" className="bg-slate-900">Médico / Conductor</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400">Severidad</label>
+                    <select
+                      value={severity}
+                      onChange={(e) => setSeverity(e.target.value)}
+                      className="mt-2 block w-full rounded-2xl border border-white/10 bg-white/5 py-3 px-3 text-white focus:border-blue-400 focus:outline-none sm:text-sm"
+                    >
+                      <option value="Baja" className="bg-slate-900">Baja</option>
+                      <option value="Media" className="bg-slate-900">Media</option>
+                      <option value="Alta" className="bg-slate-900">Alta</option>
+                      <option value="Crítica" className="bg-slate-900">Crítica</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400">Descripción</label>
+                  <textarea
+                    required
+                    rows={3}
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    placeholder="Detalles sobre lo ocurrido, retrasos proyectados..."
+                    className="mt-2 block w-full rounded-2xl border border-white/10 bg-white/5 py-3 px-3 text-white placeholder-slate-500 focus:border-blue-400 focus:outline-none sm:text-sm"
+                  />
+                </div>
+
+                <div className="flex justify-end gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsFormOpen(false)}
+                    className="btn btn-secondary btn-sm cursor-pointer"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={submitting}
+                    className="btn btn-primary btn-sm cursor-pointer"
+                  >
+                    {submitting ? "Registrando..." : "Registrar en el BUS"}
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
-        </div>
+        </Portal>
       )}
 
       <section className="section-shell pt-0">

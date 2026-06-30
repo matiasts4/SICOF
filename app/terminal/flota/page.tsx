@@ -9,6 +9,7 @@ import { PageIntro } from "@/components/page-intro";
 import { WorkspaceMetricGrid } from "@/components/workspace-metric-grid";
 import { Panel } from "@/components/ui/panel";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { Portal } from "@/components/ui/portal";
 import {
   terminalDriverNotes as mockDriverNotes,
   terminalFleetMetrics as mockFleetMetrics,
@@ -378,87 +379,89 @@ export default function TerminalFleetPage() {
       </section>
 
       {isAssignModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="w-full max-w-md rounded-2xl border border-white/10 bg-slate-900/90 p-6 text-slate-100 shadow-2xl backdrop-blur-md">
-            <h3 className="text-xl font-bold text-slate-100">Crear Asignación Manual</h3>
-            <p className="mt-1 text-xs text-slate-400">Vincula una máquina libre con un conductor y recorrido.</p>
-            
-            <form onSubmit={handleCreateAssignment} className="mt-4 space-y-4">
-              <div>
-                <label className="block text-xs uppercase tracking-wider text-slate-400 font-semibold mb-1">Bus (Máquina libre)</label>
-                <select
-                  value={selectedBusId}
-                  onChange={(e) => setSelectedBusId(e.target.value)}
-                  className="w-full rounded-xl border border-white/10 bg-slate-800/80 px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-blue-500"
-                  required
-                >
-                  <option value="">Seleccione un bus...</option>
-                  {isRealData ? (
-                    buses
-                      .filter(b => !assignments.some(a => a.id_bus === b.id_bus))
-                      .map((b) => (
-                        <option key={b.id_bus} value={b.id_bus}>{b.patente} ({b.tipo_energia}) - {b.modelo}</option>
-                      ))
-                  ) : (
-                    <>
-                      <option value="1">EB-214 (Eléctrico)</option>
-                      <option value="2">EB-301 (Eléctrico)</option>
-                      <option value="6">D-226 (Diésel)</option>
-                    </>
-                  )}
-                </select>
-              </div>
+        <Portal>
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+            <div className="w-full max-w-md rounded-2xl border border-white/10 bg-slate-900/90 p-6 text-slate-100 shadow-2xl backdrop-blur-md">
+              <h3 className="text-xl font-bold text-slate-100">Crear Asignación Manual</h3>
+              <p className="mt-1 text-xs text-slate-400">Vincula una máquina libre con un conductor y recorrido.</p>
+              
+              <form onSubmit={handleCreateAssignment} className="mt-4 space-y-4">
+                <div>
+                  <label className="block text-xs uppercase tracking-wider text-slate-400 font-semibold mb-1">Bus (Máquina libre)</label>
+                  <select
+                    value={selectedBusId}
+                    onChange={(e) => setSelectedBusId(e.target.value)}
+                    className="w-full rounded-xl border border-white/10 bg-slate-800/80 px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-blue-500"
+                    required
+                  >
+                    <option value="">Seleccione un bus...</option>
+                    {isRealData ? (
+                      buses
+                        .filter(b => !assignments.some(a => a.id_bus === b.id_bus))
+                        .map((b) => (
+                          <option key={b.id_bus} value={b.id_bus}>{b.patente} ({b.tipo_energia}) - {b.modelo}</option>
+                        ))
+                    ) : (
+                      <>
+                        <option value="1">EB-214 (Eléctrico)</option>
+                        <option value="2">EB-301 (Eléctrico)</option>
+                        <option value="6">D-226 (Diésel)</option>
+                      </>
+                    )}
+                  </select>
+                </div>
 
-              <div>
-                <label className="block text-xs uppercase tracking-wider text-slate-400 font-semibold mb-1">Conductor</label>
-                <select
-                  value={selectedConductorId}
-                  onChange={(e) => setSelectedConductorId(e.target.value)}
-                  className="w-full rounded-xl border border-white/10 bg-slate-800/80 px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-blue-500"
-                  required
-                >
-                  <option value="">Seleccione un conductor...</option>
-                  {conductorsList
-                    .filter(c => !assignments.some(a => a.id_conductor === c.id_conductor))
-                    .map((c) => (
-                      <option key={c.id_conductor} value={c.id_conductor}>{c.nombre} (Lic. {c.licencia || "A2"})</option>
+                <div>
+                  <label className="block text-xs uppercase tracking-wider text-slate-400 font-semibold mb-1">Conductor</label>
+                  <select
+                    value={selectedConductorId}
+                    onChange={(e) => setSelectedConductorId(e.target.value)}
+                    className="w-full rounded-xl border border-white/10 bg-slate-800/80 px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-blue-500"
+                    required
+                  >
+                    <option value="">Seleccione un conductor...</option>
+                    {conductorsList
+                      .filter(c => !assignments.some(a => a.id_conductor === c.id_conductor))
+                      .map((c) => (
+                        <option key={c.id_conductor} value={c.id_conductor}>{c.nombre} (Lic. {c.licencia || "A2"})</option>
+                      ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs uppercase tracking-wider text-slate-400 font-semibold mb-1">Ruta (Servicio)</label>
+                  <select
+                    value={selectedRouteId}
+                    onChange={(e) => setSelectedRouteId(e.target.value)}
+                    className="w-full rounded-xl border border-white/10 bg-slate-800/80 px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-blue-500"
+                    required
+                  >
+                    <option value="">Seleccione un servicio...</option>
+                    {routesList.map((r) => (
+                      <option key={r.id_ruta} value={r.id_ruta}>{r.codigo_recorrido} - {r.descripcion || "Ruta"}</option>
                     ))}
-                </select>
-              </div>
+                  </select>
+                </div>
 
-              <div>
-                <label className="block text-xs uppercase tracking-wider text-slate-400 font-semibold mb-1">Ruta (Servicio)</label>
-                <select
-                  value={selectedRouteId}
-                  onChange={(e) => setSelectedRouteId(e.target.value)}
-                  className="w-full rounded-xl border border-white/10 bg-slate-800/80 px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-blue-500"
-                  required
-                >
-                  <option value="">Seleccione un servicio...</option>
-                  {routesList.map((r) => (
-                    <option key={r.id_ruta} value={r.id_ruta}>{r.codigo_recorrido} - {r.descripcion || "Ruta"}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="flex justify-end gap-3 mt-6">
-                <button
-                  type="button"
-                  onClick={() => setIsAssignModalOpen(false)}
-                  className="px-4 py-2 rounded-xl text-sm font-semibold text-slate-300 bg-white/5 hover:bg-white/10 transition cursor-pointer"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 rounded-xl text-sm font-semibold text-white bg-blue-600 hover:bg-blue-500 transition cursor-pointer"
-                >
-                  Asignar Unidad
-                </button>
-              </div>
-            </form>
+                <div className="flex justify-end gap-3 mt-6">
+                  <button
+                    type="button"
+                    onClick={() => setIsAssignModalOpen(false)}
+                    className="px-4 py-2 rounded-xl text-sm font-semibold text-slate-300 bg-white/5 hover:bg-white/10 transition cursor-pointer"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-4 py-2 rounded-xl text-sm font-semibold text-white bg-blue-600 hover:bg-blue-500 transition cursor-pointer"
+                  >
+                    Asignar Unidad
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
-        </div>
+        </Portal>
       )}
     </main>
 

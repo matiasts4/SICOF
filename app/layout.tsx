@@ -31,8 +31,8 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="es" className="dark">
-      <body className={`${manrope.variable} ${sora.variable} ${jetBrainsMono.variable} bg-[#080a0f]`}>
+    <html lang="es" className="dark" suppressHydrationWarning>
+      <body className={`${manrope.variable} ${sora.variable} ${jetBrainsMono.variable} bg-[#080a0f]`} suppressHydrationWarning>
         <div className="relative min-h-screen overflow-x-hidden">
           <PermissionsProvider>
             <AuthGuard>

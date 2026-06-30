@@ -11,6 +11,7 @@ import { PageIntro } from "@/components/page-intro";
 import { WorkspaceMetricGrid } from "@/components/workspace-metric-grid";
 import { Panel } from "@/components/ui/panel";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { Portal } from "@/components/ui/portal";
 import {
   activeSessions as mockActiveSessions,
   adminUserMetrics as mockUserMetrics,
@@ -367,145 +368,147 @@ export default function AdminUsersPage() {
 
       {/* ── Modal Crear Usuario ────────────────────────────────────────────────── */}
       {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          {/* Backdrop */}
-          <div
-            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-            onClick={() => { setShowModal(false); setFormError(null); }}
-          />
-          {/* Panel */}
-          <div className="relative z-10 w-full max-w-md rounded-3xl border border-white/10 bg-[#0f1117] p-8 shadow-2xl">
-            <div className="mb-6 flex items-center justify-between">
-              <div>
-                <p className="text-[0.65rem] font-semibold uppercase tracking-[0.22em] text-blue-400">
-                  TI · Admin
-                </p>
-                <h2 className="mt-1 text-xl font-bold text-slate-100">Crear Nuevo Usuario</h2>
-              </div>
-              <button
-                onClick={() => { setShowModal(false); setFormError(null); }}
-                className="cursor-pointer rounded-xl p-2 text-slate-400 hover:bg-white/8 hover:text-slate-100 transition-colors"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
-            <form onSubmit={handleCreateUser} className="space-y-4">
-              {/* Nombre */}
-              <div>
-                <label className="mb-1.5 block text-xs font-semibold uppercase tracking-widest text-slate-400">
-                  Nombre Completo
-                </label>
-                <input
-                  id="new-user-nombre"
-                  type="text"
-                  required
-                  value={form.nombre}
-                  onChange={e => setForm(f => ({ ...f, nombre: e.target.value }))}
-                  placeholder="Ej: María González"
-                  className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-100 placeholder-slate-600 outline-none ring-0 transition focus:border-blue-500/50 focus:bg-white/8"
-                />
-              </div>
-
-              {/* Username */}
-              <div>
-                <label className="mb-1.5 block text-xs font-semibold uppercase tracking-widest text-slate-400">
-                  Username
-                </label>
-                <input
-                  id="new-user-username"
-                  type="text"
-                  required
-                  value={form.username}
-                  onChange={e => setForm(f => ({ ...f, username: e.target.value.toLowerCase().replace(/\s/g, "_") }))}
-                  placeholder="Ej: m.gonzalez"
-                  className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 font-mono text-sm text-slate-100 placeholder-slate-600 outline-none transition focus:border-blue-500/50 focus:bg-white/8"
-                />
-              </div>
-
-              {/* Password */}
-              <div>
-                <label className="mb-1.5 block text-xs font-semibold uppercase tracking-widest text-slate-400">
-                  Contraseña inicial
-                </label>
-                <input
-                  id="new-user-password"
-                  type="password"
-                  required
-                  minLength={6}
-                  value={form.password}
-                  onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
-                  placeholder="Mínimo 6 caracteres"
-                  className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-100 placeholder-slate-600 outline-none transition focus:border-blue-500/50 focus:bg-white/8"
-                />
-              </div>
-
-              {/* Rol */}
-              <div>
-                <label className="mb-1.5 block text-xs font-semibold uppercase tracking-widest text-slate-400">
-                  Rol
-                </label>
-                <select
-                  id="new-user-rol"
-                  value={form.rol}
-                  onChange={e => setForm(f => ({ ...f, rol: e.target.value }))}
-                  className="w-full cursor-pointer rounded-xl border border-white/10 bg-[#0f1117] px-4 py-3 text-sm text-slate-100 outline-none transition focus:border-blue-500/50"
-                >
-                  {ROLES.map(r => (
-                    <option key={r} value={r}>{r}</option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Terminal */}
-              <div>
-                <label className="mb-1.5 block text-xs font-semibold uppercase tracking-widest text-slate-400">
-                  Terminal de acceso
-                </label>
-                <select
-                  id="new-user-terminal"
-                  value={form.id_terminal === null ? "" : String(form.id_terminal)}
-                  onChange={e => setForm(f => ({ ...f, id_terminal: e.target.value === "" ? "" : Number(e.target.value) }))}
-                  className="w-full cursor-pointer rounded-xl border border-white/10 bg-[#0f1117] px-4 py-3 text-sm text-slate-100 outline-none transition focus:border-blue-500/50"
-                >
-                  {TERMINALES.map(t => (
-                    <option key={String(t.id)} value={t.id === null ? "" : String(t.id)}>
-                      {t.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Error */}
-              {formError && (
-                <div className="flex items-center gap-2 rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-400">
-                  <AlertCircle className="h-4 w-4 shrink-0" />
-                  {formError}
+        <Portal>
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            {/* Backdrop */}
+            <div
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+              onClick={() => { setShowModal(false); setFormError(null); }}
+            />
+            {/* Panel */}
+            <div className="relative z-10 w-full max-w-md rounded-3xl border border-white/10 bg-[#0f1117] p-8 shadow-2xl">
+              <div className="mb-6 flex items-center justify-between">
+                <div>
+                  <p className="text-[0.65rem] font-semibold uppercase tracking-[0.22em] text-blue-400">
+                    TI · Admin
+                  </p>
+                  <h2 className="mt-1 text-xl font-bold text-slate-100">Crear Nuevo Usuario</h2>
                 </div>
-              )}
-
-              {/* Actions */}
-              <div className="flex gap-3 pt-2">
                 <button
-                  type="button"
                   onClick={() => { setShowModal(false); setFormError(null); }}
-                  className="flex-1 cursor-pointer rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-slate-300 transition hover:bg-white/8"
+                  className="cursor-pointer rounded-xl p-2 text-slate-400 hover:bg-white/8 hover:text-slate-100 transition-colors"
                 >
-                  Cancelar
-                </button>
-                <button
-                  id="submit-create-user"
-                  type="submit"
-                  disabled={formLoading}
-                  className="flex-1 cursor-pointer rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-500 disabled:opacity-50 flex items-center justify-center gap-2"
-                >
-                  {formLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />}
-                  {formLoading ? "Creando..." : "Crear Usuario"}
+                  <X className="h-5 w-5" />
                 </button>
               </div>
-            </form>
+
+              <form onSubmit={handleCreateUser} className="space-y-4">
+                {/* Nombre */}
+                <div>
+                  <label className="mb-1.5 block text-xs font-semibold uppercase tracking-widest text-slate-400">
+                    Nombre Completo
+                  </label>
+                  <input
+                    id="new-user-nombre"
+                    type="text"
+                    required
+                    value={form.nombre}
+                    onChange={e => setForm(f => ({ ...f, nombre: e.target.value }))}
+                    placeholder="Ej: María González"
+                    className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-100 placeholder-slate-600 outline-none ring-0 transition focus:border-blue-500/50 focus:bg-white/8"
+                  />
+                </div>
+
+                {/* Username */}
+                <div>
+                  <label className="mb-1.5 block text-xs font-semibold uppercase tracking-widest text-slate-400">
+                    Username
+                  </label>
+                  <input
+                    id="new-user-username"
+                    type="text"
+                    required
+                    value={form.username}
+                    onChange={e => setForm(f => ({ ...f, username: e.target.value.toLowerCase().replace(/\s/g, "_") }))}
+                    placeholder="Ej: m.gonzalez"
+                    className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 font-mono text-sm text-slate-100 placeholder-slate-600 outline-none transition focus:border-blue-500/50 focus:bg-white/8"
+                  />
+                </div>
+
+                {/* Password */}
+                <div>
+                  <label className="mb-1.5 block text-xs font-semibold uppercase tracking-widest text-slate-400">
+                    Contraseña inicial
+                  </label>
+                  <input
+                    id="new-user-password"
+                    type="password"
+                    required
+                    minLength={6}
+                    value={form.password}
+                    onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
+                    placeholder="Mínimo 6 caracteres"
+                    className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-100 placeholder-slate-600 outline-none transition focus:border-blue-500/50 focus:bg-white/8"
+                  />
+                </div>
+
+                {/* Rol */}
+                <div>
+                  <label className="mb-1.5 block text-xs font-semibold uppercase tracking-widest text-slate-400">
+                    Rol
+                  </label>
+                  <select
+                    id="new-user-rol"
+                    value={form.rol}
+                    onChange={e => setForm(f => ({ ...f, rol: e.target.value }))}
+                    className="w-full cursor-pointer rounded-xl border border-white/10 bg-[#0f1117] px-4 py-3 text-sm text-slate-100 outline-none transition focus:border-blue-500/50"
+                  >
+                    {ROLES.map(r => (
+                      <option key={r} value={r}>{r}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Terminal */}
+                <div>
+                  <label className="mb-1.5 block text-xs font-semibold uppercase tracking-widest text-slate-400">
+                    Terminal de acceso
+                  </label>
+                  <select
+                    id="new-user-terminal"
+                    value={form.id_terminal === null ? "" : String(form.id_terminal)}
+                    onChange={e => setForm(f => ({ ...f, id_terminal: e.target.value === "" ? "" : Number(e.target.value) }))}
+                    className="w-full cursor-pointer rounded-xl border border-white/10 bg-[#0f1117] px-4 py-3 text-sm text-slate-100 outline-none transition focus:border-blue-500/50"
+                  >
+                    {TERMINALES.map(t => (
+                      <option key={String(t.id)} value={t.id === null ? "" : String(t.id)}>
+                        {t.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Error */}
+                {formError && (
+                  <div className="flex items-center gap-2 rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-400">
+                    <AlertCircle className="h-4 w-4 shrink-0" />
+                    {formError}
+                  </div>
+                )}
+
+                {/* Actions */}
+                <div className="flex gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => { setShowModal(false); setFormError(null); }}
+                    className="flex-1 cursor-pointer rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-slate-300 transition hover:bg-white/8"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    id="submit-create-user"
+                    type="submit"
+                    disabled={formLoading}
+                    className="flex-1 cursor-pointer rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-500 disabled:opacity-50 flex items-center justify-center gap-2"
+                  >
+                    {formLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />}
+                    {formLoading ? "Creando..." : "Crear Usuario"}
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
-        </div>
+        </Portal>
       )}
     </main>
   );

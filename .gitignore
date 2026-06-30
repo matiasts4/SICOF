@@ -43,4 +43,7 @@ __pycache__/
 backend/db/sicof.db
 
 # Scripts temporales de diagnóstico
-verify_db.py
+verify_db.py
+
+# Documentación técnica del sistema (generada localmente)
+documentacion/

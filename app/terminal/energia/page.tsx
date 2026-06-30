@@ -9,6 +9,7 @@ import { PageIntro } from "@/components/page-intro";
 import { WorkspaceMetricGrid } from "@/components/workspace-metric-grid";
 import { Panel } from "@/components/ui/panel";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { Portal } from "@/components/ui/portal";
 import {
   chargerBays as mockChargerBays,
   chargingBoard as mockChargingBoard,
@@ -326,60 +327,62 @@ export default function TerminalEnergyPage() {
       </section>
 
       {isChargeModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="w-full max-w-md rounded-2xl border border-white/10 bg-slate-900/90 p-6 text-slate-100 shadow-2xl backdrop-blur-md">
-            <h3 className="text-xl font-bold text-slate-100">Registrar Carga de Bus</h3>
-            <p className="mt-1 text-xs text-slate-400">Envía un bus eléctrico a un cargador rápido y actualiza su estado.</p>
-            
-            <form onSubmit={handleRegisterCharge} className="mt-4 space-y-4">
-              <div>
-                <label className="block text-xs uppercase tracking-wider text-slate-400 font-semibold mb-1">Bus Eléctrico</label>
-                <select
-                  value={selectedChargeBusId}
-                  onChange={(e) => setSelectedChargeBusId(e.target.value)}
-                  className="w-full rounded-xl border border-white/10 bg-slate-800/80 px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-blue-500"
-                  required
-                >
-                  <option value="">Seleccione un bus...</option>
-                  {electricBuses.map((b) => (
-                    <option key={b.id_bus} value={b.id_bus}>{b.patente} {b.modelo ? `(${b.modelo})` : ""}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs uppercase tracking-wider text-slate-400 font-semibold mb-1">Porcentaje de Carga (SoC)</label>
-                <div className="flex items-center gap-3">
-                  <input
-                    type="range"
-                    min="1"
-                    max="100"
-                    value={chargeLevel}
-                    onChange={(e) => setChargeLevel(parseInt(e.target.value, 10))}
-                    className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-green-500"
-                  />
-                  <span className="w-12 text-right font-mono font-bold text-green-400">{chargeLevel}%</span>
+        <Portal>
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+            <div className="w-full max-w-md rounded-2xl border border-white/10 bg-slate-900/90 p-6 text-slate-100 shadow-2xl backdrop-blur-md">
+              <h3 className="text-xl font-bold text-slate-100">Registrar Carga de Bus</h3>
+              <p className="mt-1 text-xs text-slate-400">Envía un bus eléctrico a un cargador rápido y actualiza su estado.</p>
+              
+              <form onSubmit={handleRegisterCharge} className="mt-4 space-y-4">
+                <div>
+                  <label className="block text-xs uppercase tracking-wider text-slate-400 font-semibold mb-1">Bus Eléctrico</label>
+                  <select
+                    value={selectedChargeBusId}
+                    onChange={(e) => setSelectedChargeBusId(e.target.value)}
+                    className="w-full rounded-xl border border-white/10 bg-slate-800/80 px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-blue-500"
+                    required
+                  >
+                    <option value="">Seleccione un bus...</option>
+                    {electricBuses.map((b) => (
+                      <option key={b.id_bus} value={b.id_bus}>{b.patente} {b.modelo ? `(${b.modelo})` : ""}</option>
+                    ))}
+                  </select>
                 </div>
-              </div>
 
-              <div className="flex justify-end gap-3 mt-6">
-                <button
-                  type="button"
-                  onClick={() => setIsChargeModalOpen(false)}
-                  className="px-4 py-2 rounded-xl text-sm font-semibold text-slate-300 bg-white/5 hover:bg-white/10 transition cursor-pointer"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 rounded-xl text-sm font-semibold text-white bg-green-600 hover:bg-green-500 transition cursor-pointer"
-                >
-                  Confirmar Carga
-                </button>
-              </div>
-            </form>
+                <div>
+                  <label className="block text-xs uppercase tracking-wider text-slate-400 font-semibold mb-1">Porcentaje de Carga (SoC)</label>
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="range"
+                      min="1"
+                      max="100"
+                      value={chargeLevel}
+                      onChange={(e) => setChargeLevel(parseInt(e.target.value, 10))}
+                      className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-green-500"
+                    />
+                    <span className="w-12 text-right font-mono font-bold text-green-400">{chargeLevel}%</span>
+                  </div>
+                </div>
+
+                <div className="flex justify-end gap-3 mt-6">
+                  <button
+                    type="button"
+                    onClick={() => setIsChargeModalOpen(false)}
+                    className="px-4 py-2 rounded-xl text-sm font-semibold text-slate-300 bg-white/5 hover:bg-white/10 transition cursor-pointer"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-4 py-2 rounded-xl text-sm font-semibold text-white bg-green-600 hover:bg-green-500 transition cursor-pointer"
+                  >
+                    Confirmar Carga
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
-        </div>
+        </Portal>
       )}
     </main>
   );
